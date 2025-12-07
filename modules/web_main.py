@@ -611,16 +611,17 @@ INDEX_HTML = """
   <br/>
   <select id="tenant-select"></select>
 
+  <div class="settings-actions">
+    <code>1</code> –
+    <span id="a1-en">Export snapshots for all tenants</span>
+    <span id="a1-ru" class="hidden">Экспорт снапшотов всех тенантов</span>
+    <button onclick="runSnapshots()">Run</button>
+  </div>
+
   <h2 id="section-actions-en">2. Actions</h2>
   <h2 id="section-actions-ru" class="hidden">2. Действия</h2>
 
   <ul>
-    <li>
-      <code>1</code> –
-      <span id="a1-en">Export snapshots for all tenants</span>
-      <span id="a1-ru" class="hidden">Экспорт снапшотов всех тенантов</span>
-      <button onclick="runSnapshots()">Run</button>
-    </li>
     <li>
       <code>2</code> –
       <span id="a2-en">Export rules for selected tenant</span>
