@@ -4,7 +4,7 @@ import json
 from typing import Any, Dict, List, Optional
 
 import httpx
-from fastapi import FastAPI, File, UploadFile
+from fastapi import FastAPI, File, UploadFile, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 from loguru import logger
 
@@ -65,6 +65,46 @@ async def _find_tenant(
         if str(t.get("id")) == tenant_id:
             return t
     return None
+
+
+def _settings_payload() -> Dict[str, Any]:
+    return {
+        "theme": config.UI_THEME,
+        "language": config.UI_LANGUAGE,
+        "af_url": config.AF_URL,
+        "api_login": config.API_LOGIN,
+        "api_password": config.API_PASSWORD,
+    }
+
+
+@app.get("/api/settings")
+async def api_get_settings():
+    return _settings_payload()
+
+
+@app.post("/api/settings")
+async def api_save_settings(request: Request):
+    payload = await request.json()
+    if not isinstance(payload, dict):
+        return JSONResponse({"error": "Invalid JSON payload"}, status_code=400)
+
+    updates: Dict[str, Any] = {}
+    mapping = {
+        "theme": "THEME",
+        "language": "LANGUAGE",
+        "af_url": "AF_URL",
+        "api_login": "API_LOGIN",
+        "api_password": "API_PASSWORD",
+    }
+
+    for key, target in mapping.items():
+        if key in payload:
+            updates[target] = payload.get(key)
+
+    if updates:
+        config.save_settings(updates)
+
+    return _settings_payload()
 
 
 # ---------------------------------------------------------------------------
@@ -290,6 +330,32 @@ INDEX_HTML = """
       flex-wrap: wrap;
     }
 
+    .settings-panel {
+      border: 1px solid var(--border-color);
+      background: var(--panel-bg);
+      padding: 1rem;
+      border-radius: 10px;
+      margin-bottom: 1rem;
+      max-width: 520px;
+    }
+
+    .settings-row {
+      display: flex;
+      flex-direction: column;
+      gap: 0.35rem;
+      margin-bottom: 0.75rem;
+    }
+
+    .settings-row label {
+      font-weight: 600;
+    }
+
+    .settings-actions {
+      display: flex;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+    }
+
     .hidden { display: none; }
 
     .log {
@@ -311,6 +377,65 @@ INDEX_HTML = """
     <button onclick="setLang('en')">EN</button>
     <button onclick="setLang('ru')">RU</button>
     <button id="theme-toggle" onclick="toggleTheme()">Dark theme</button>
+    <button id="settings-toggle" onclick="toggleSettings()">⚙️ Settings</button>
+  </div>
+
+  <div id="settings-panel" class="settings-panel hidden">
+    <h2 id="settings-title-en">Settings</h2>
+    <h2 id="settings-title-ru" class="hidden">Настройки</h2>
+
+    <div class="settings-row">
+      <label>
+        <span id="label-theme-en">Theme</span>
+        <span id="label-theme-ru" class="hidden">Тема</span>
+      </label>
+      <select id="setting-theme">
+        <option value="light">Light</option>
+        <option value="dark">Dark</option>
+      </select>
+    </div>
+
+    <div class="settings-row">
+      <label>
+        <span id="label-language-en">Language</span>
+        <span id="label-language-ru" class="hidden">Язык</span>
+      </label>
+      <select id="setting-language">
+        <option value="en">EN</option>
+        <option value="ru">RU</option>
+      </select>
+    </div>
+
+    <div class="settings-row">
+      <label>
+        <span id="label-af-url-en">AF server URL</span>
+        <span id="label-af-url-ru" class="hidden">Адрес сервера AF</span>
+      </label>
+      <input type="text" id="setting-af-url" placeholder="https://ptaf.example.com" />
+    </div>
+
+    <div class="settings-row">
+      <label>
+        <span id="label-api-login-en">AF login</span>
+        <span id="label-api-login-ru" class="hidden">Логин AF</span>
+      </label>
+      <input type="text" id="setting-api-login" placeholder="user@example" />
+    </div>
+
+    <div class="settings-row">
+      <label>
+        <span id="label-api-password-en">AF password</span>
+        <span id="label-api-password-ru" class="hidden">Пароль AF</span>
+      </label>
+      <input type="password" id="setting-api-password" placeholder="••••••" />
+    </div>
+
+    <div class="settings-actions">
+      <button onclick="saveSettings()" id="settings-save-en">Save settings</button>
+      <button onclick="saveSettings()" id="settings-save-ru" class="hidden">Сохранить</button>
+      <button onclick="toggleSettings()" id="settings-close-en">Close</button>
+      <button onclick="toggleSettings()" id="settings-close-ru" class="hidden">Закрыть</button>
+    </div>
   </div>
 
   <h1 id="title-en">PTAF PRO Web Tools</h1>
@@ -382,8 +507,14 @@ INDEX_HTML = """
   <div id="log" class="log"></div>
 
   <script>
-    let currentLang = "en";
+    let currentLang = "ru";
     let currentTheme = "light";
+
+    function themeToggleText(theme, lang) {
+      const lightText = lang === "ru" ? "Светлая тема" : "Light theme";
+      const darkText = lang === "ru" ? "Тёмная тема" : "Dark theme";
+      return theme === "light" ? darkText : lightText;
+    }
 
     function setLang(lang) {
       currentLang = lang;
@@ -398,23 +529,49 @@ INDEX_HTML = """
         ["a1-en", "a1-ru"],
         ["a2-en", "a2-ru"],
         ["a3-en", "a3-ru"],
+        ["settings-title-en", "settings-title-ru"],
+        ["label-theme-en", "label-theme-ru"],
+        ["label-language-en", "label-language-ru"],
+        ["label-af-url-en", "label-af-url-ru"],
+        ["label-api-login-en", "label-api-login-ru"],
+        ["label-api-password-en", "label-api-password-ru"],
+        ["settings-save-en", "settings-save-ru"],
+        ["settings-close-en", "settings-close-ru"],
       ];
       ids.forEach(([en, ru]) => {
         document.getElementById(en).classList.toggle("hidden", lang !== "en");
         document.getElementById(ru).classList.toggle("hidden", lang !== "ru");
       });
+
+      document.getElementById("settings-toggle").textContent =
+        lang === "ru" ? "⚙️ Настройки" : "⚙️ Settings";
+
+      const languageSelect = document.getElementById("setting-language");
+      if (languageSelect) {
+        languageSelect.value = lang;
+      }
+
+      setTheme(currentTheme);
     }
 
     function setTheme(theme) {
       currentTheme = theme;
       document.body.setAttribute("data-theme", theme);
-      const toggleText = theme === "light" ? "Dark theme" : "Light theme";
+      const toggleText = themeToggleText(theme, currentLang);
       document.getElementById("theme-toggle").textContent = toggleText;
+      const themeSelect = document.getElementById("setting-theme");
+      if (themeSelect) {
+        themeSelect.value = theme;
+      }
     }
 
     function toggleTheme() {
       const next = currentTheme === "light" ? "dark" : "light";
       setTheme(next);
+    }
+
+    function toggleSettings() {
+      document.getElementById("settings-panel").classList.toggle("hidden");
     }
 
     function log(msg) {
@@ -423,6 +580,65 @@ INDEX_HTML = """
       const now = new Date().toISOString();
       line.textContent = "[" + now + "] " + msg;
       el.prepend(line);
+    }
+
+    async function loadSettings() {
+      log("Loading settings...");
+      try {
+        const resp = await fetch("/api/settings");
+        if (!resp.ok) {
+          log("Error loading settings: " + resp.status);
+          setLang(currentLang);
+          setTheme(currentTheme);
+          return;
+        }
+        const data = await resp.json();
+        currentLang = data.language || currentLang;
+        currentTheme = data.theme || currentTheme;
+
+        document.getElementById("setting-language").value = currentLang;
+        document.getElementById("setting-theme").value = currentTheme;
+        document.getElementById("setting-af-url").value = data.af_url || "";
+        document.getElementById("setting-api-login").value = data.api_login || "";
+        document.getElementById("setting-api-password").value = data.api_password || "";
+
+        setLang(currentLang);
+        setTheme(currentTheme);
+      } catch (e) {
+        log("Error loading settings: " + e);
+        setLang(currentLang);
+        setTheme(currentTheme);
+      }
+    }
+
+    async function saveSettings() {
+      const payload = {
+        theme: document.getElementById("setting-theme").value,
+        language: document.getElementById("setting-language").value,
+        af_url: document.getElementById("setting-af-url").value,
+        api_login: document.getElementById("setting-api-login").value,
+        api_password: document.getElementById("setting-api-password").value,
+      };
+
+      log("Saving settings...");
+      const resp = await fetch("/api/settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      const data = await resp.json();
+      if (!resp.ok) {
+        log("Settings save failed: " + JSON.stringify(data));
+        return;
+      }
+
+      log("Settings saved");
+      currentLang = data.language || payload.language;
+      currentTheme = data.theme || payload.theme;
+      setLang(currentLang);
+      setTheme(currentTheme);
+      toggleSettings();
     }
 
     async function loadTenants() {
@@ -525,9 +741,13 @@ INDEX_HTML = """
       log("Import result: " + JSON.stringify(data));
     }
 
-    // init
-    loadTenants().catch((e) => log("Error: " + e));
-    setTheme(currentTheme);
+    async function initUi() {
+      await loadSettings();
+      await loadTenants();
+      setTheme(currentTheme);
+    }
+
+    initUi().catch((e) => log("Error: " + e));
   </script>
 </body>
 </html>
