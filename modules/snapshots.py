@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 import re
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -29,6 +29,41 @@ def _snapshot_filename(tenant: Dict[str, Any]) -> Path:
     ts = datetime.utcnow().strftime("%Y%m%dT%H%M%SZ")
     fname = f"{ts}_{name}_{tenant_id}.snapshot.json"
     return config.SNAPSHOTS_DIR / fname
+
+
+def _cleanup_old_snapshots() -> int:
+    """
+    Удаляет снапшоты старше SNAPSHOT_RETENTION_DAYS, если параметр задан.
+
+    Возвращает количество удалённых файлов.
+    """
+
+    retention_days = config.SNAPSHOT_RETENTION_DAYS
+    if not retention_days:
+        return 0
+
+    cutoff = datetime.utcnow() - timedelta(days=retention_days)
+    removed = 0
+
+    for path in config.SNAPSHOTS_DIR.glob("*.snapshot.json"):
+        try:
+            mtime = datetime.utcfromtimestamp(path.stat().st_mtime)
+        except OSError:
+            continue
+
+        if mtime < cutoff:
+            try:
+                path.unlink()
+                removed += 1
+            except OSError:
+                logger.warning(f"Failed to delete old snapshot: {path}")
+
+    if removed:
+        logger.info(
+            f"Removed {removed} snapshots older than {retention_days} days"
+        )
+
+    return removed
 
 
 async def export_snapshot_for_tenant(
@@ -81,6 +116,10 @@ async def export_all_tenant_snapshots(tm: TokenManager) -> List[Path]:
     Возвращает список созданных файлов.
     """
     created_files: List[Path] = []
+
+    removed = _cleanup_old_snapshots()
+    if removed:
+        logger.info(f"Cleanup complete: {removed} old snapshots removed")
 
     async with httpx.AsyncClient(
         verify=config.VERIFY_SSL,

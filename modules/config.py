@@ -143,6 +143,17 @@ class Config:
             os.getenv("SNAPSHOTS_DIR", str(self.BASE_DIR / "snapshots"))
         ).resolve()
 
+        retention_env = os.getenv("SNAPSHOT_RETENTION_DAYS", "").strip()
+        self.SNAPSHOT_RETENTION_DAYS: Optional[int] = None
+        if retention_env:
+            try:
+                retention_days = int(retention_env)
+                if retention_days > 0:
+                    self.SNAPSHOT_RETENTION_DAYS = retention_days
+            except ValueError:
+                # Некорректное значение — игнорируем и не включаем очистку.
+                self.SNAPSHOT_RETENTION_DAYS = None
+
         self.RULES_DIR: Path = Path(
             os.getenv("RULES_DIR", str(self.BASE_DIR / "rules"))
         ).resolve()
