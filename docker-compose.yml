@@ -3,7 +3,6 @@ services:
     build: .
     image: pt-af-pro-api-tools
     restart: unless-stopped
-    env_file: .env
     ports:
       - "8000:8000"
     user: "${UID}:${GID}"

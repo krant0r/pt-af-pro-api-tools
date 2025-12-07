@@ -11,8 +11,9 @@ rules / actions / snapshots.
 
 ## Основные функции
 
-1. Параметр окружения `.env` задаёт срок хранения снапшотов (количество дней),
-   старше которого файлы автоматически удаляются перед новым экспортом.
+1. Переменная окружения `SNAPSHOT_RETENTION_DAYS` задаёт срок хранения
+   снапшотов (количество дней), старше которого файлы автоматически удаляются
+   перед новым экспортом.
 2. Управление действиями в правилах через меню, аналогичное меню правил:
    1. Замена или добавление действий из других тенантов через выпадающий список
       (по совпадению имени действия, а не ID, которые отличаются в тенантах).
@@ -38,7 +39,9 @@ Connection parameters (AF server address, credentials, SSL verification flag,
 LDAP toggle) are configured from the web UI and stored in `data/settings.json`.
 Use the settings panel to provide an AF server such as `https://afpro.local` and
 fill in login/password or API token secrets. Docker secrets are still supported
-for credentials.
+for credentials, and the default Docker Compose setup no longer depends on a
+`.env` file — configure values directly via the UI or explicit environment
+variables.
 
 Environment variables remain available for auxiliary options:
 
