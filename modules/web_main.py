@@ -15,6 +15,8 @@ from .rules_actions import (
     export_rules_for_tenant,
     import_action_payload,
     import_rule_payload,
+    list_local_exports,
+    load_local_payload,
 )
 
 from .snapshots import export_all_tenant_snapshots, export_snapshot_for_tenant
@@ -271,6 +273,94 @@ async def api_import_action(
     return result
 
 
+@app.get("/api/local-imports")
+async def api_list_local_imports():
+    """
+    Возвращает список экспортированных правил/действий, доступных в файловой системе.
+    """
+
+    return {
+        "rules": list_local_exports(config.RULES_DIR, "rule"),
+        "actions": list_local_exports(config.ACTIONS_DIR, "action"),
+    }
+
+
+@app.post("/api/tenants/{tenant_id}/rules/import/local")
+async def api_import_rule_local(tenant_id: str, request: Request):
+    payload = await request.json()
+    source_tenant = str(payload.get("source_tenant") or "").strip()
+    filename = str(payload.get("filename") or "").strip()
+
+    if not source_tenant or not filename:
+        return JSONResponse(
+            {"error": "source_tenant and filename are required"},
+            status_code=400,
+        )
+
+    try:
+        local_payload = load_local_payload(
+            config.RULES_DIR, source_tenant, filename, "rule"
+        )
+    except FileNotFoundError:
+        return JSONResponse(
+            {"error": "Requested rule file not found for the specified tenant"},
+            status_code=404,
+        )
+    except ValueError as exc:
+        return JSONResponse({"error": str(exc)}, status_code=400)
+
+    async with httpx.AsyncClient(
+        verify=config.VERIFY_SSL,
+        timeout=config.REQUEST_TIMEOUT,
+    ) as client:
+        result = await import_rule_payload(
+            client,
+            token_manager,
+            tenant_id,
+            local_payload,
+        )
+
+    return result
+
+
+@app.post("/api/tenants/{tenant_id}/actions/import/local")
+async def api_import_action_local(tenant_id: str, request: Request):
+    payload = await request.json()
+    source_tenant = str(payload.get("source_tenant") or "").strip()
+    filename = str(payload.get("filename") or "").strip()
+
+    if not source_tenant or not filename:
+        return JSONResponse(
+            {"error": "source_tenant and filename are required"},
+            status_code=400,
+        )
+
+    try:
+        local_payload = load_local_payload(
+            config.ACTIONS_DIR, source_tenant, filename, "action"
+        )
+    except FileNotFoundError:
+        return JSONResponse(
+            {"error": "Requested action file not found for the specified tenant"},
+            status_code=404,
+        )
+    except ValueError as exc:
+        return JSONResponse({"error": str(exc)}, status_code=400)
+
+    async with httpx.AsyncClient(
+        verify=config.VERIFY_SSL,
+        timeout=config.REQUEST_TIMEOUT,
+    ) as client:
+        result = await import_action_payload(
+            client,
+            token_manager,
+            tenant_id,
+            local_payload,
+        )
+
+    return result
+
+
 # ---------------------------------------------------------------------------
 # Простая веб-страница UI (EN/RU)
 # ---------------------------------------------------------------------------
@@ -502,6 +592,43 @@ INDEX_HTML = """
     <button onclick="importAction()">Import action JSON</button>
   </div>
 
+  <h3 id="local-import-title-en">Or use exported files from /data</h3>
+  <h3 id="local-import-title-ru" class="hidden">
+    Или выбери уже выгруженные файлы из /data
+  </h3>
+
+  <div class="settings-panel">
+    <div class="settings-row">
+      <label>
+        <span id="local-rules-label-en">Rules from tenant (by name):</span>
+        <span id="local-rules-label-ru" class="hidden">
+          Правила из тенанта (по названию):
+        </span>
+      </label>
+      <div class="settings-actions">
+        <select id="local-rules-tenant" onchange="updateLocalFiles('rule')"></select>
+        <select id="local-rules-file"></select>
+        <button onclick="importRuleFromLocal()">Import selected rule</button>
+      </div>
+    </div>
+
+    <div class="settings-row">
+      <label>
+        <span id="local-actions-label-en">Actions from tenant (by name):</span>
+        <span id="local-actions-label-ru" class="hidden">
+          Действия из тенанта (по названию):
+        </span>
+      </label>
+      <div class="settings-actions">
+        <select id="local-actions-tenant" onchange="updateLocalFiles('action')"></select>
+        <select id="local-actions-file"></select>
+        <button onclick="importActionFromLocal()">Import selected action</button>
+      </div>
+    </div>
+
+    <button onclick="loadLocalExports()">Reload exported files list</button>
+  </div>
+
   <h2 id="log-title-en">Log</h2>
   <h2 id="log-title-ru" class="hidden">Лог</h2>
   <div id="log" class="log"></div>
@@ -509,6 +636,8 @@ INDEX_HTML = """
   <script>
     let currentLang = "ru";
     let currentTheme = "light";
+    let localRuleExports = [];
+    let localActionExports = [];
 
     function themeToggleText(theme, lang) {
       const lightText = lang === "ru" ? "Светлая тема" : "Light theme";
@@ -537,6 +666,9 @@ INDEX_HTML = """
         ["label-api-password-en", "label-api-password-ru"],
         ["settings-save-en", "settings-save-ru"],
         ["settings-close-en", "settings-close-ru"],
+        ["local-import-title-en", "local-import-title-ru"],
+        ["local-rules-label-en", "local-rules-label-ru"],
+        ["local-actions-label-en", "local-actions-label-ru"],
       ];
       ids.forEach(([en, ru]) => {
         document.getElementById(en).classList.toggle("hidden", lang !== "en");
@@ -718,6 +850,115 @@ INDEX_HTML = """
       await importJsonTo("/actions/import");
     }
 
+    function localData(kind) {
+      return kind === "rule" ? localRuleExports : localActionExports;
+    }
+
+    function updateLocalSelects(kind) {
+      const tenantsSelect = document.getElementById(
+        `local-${kind}s-tenant`
+      );
+      const filesSelect = document.getElementById(`local-${kind}s-file`);
+      const entries = localData(kind);
+
+      tenantsSelect.innerHTML = "";
+      filesSelect.innerHTML = "";
+
+      entries.forEach((entry) => {
+        const opt = document.createElement("option");
+        opt.value = entry.tenant_name;
+        opt.textContent = entry.tenant_name;
+        tenantsSelect.appendChild(opt);
+      });
+
+      updateLocalFiles(kind);
+    }
+
+    function updateLocalFiles(kind) {
+      const tenantsSelect = document.getElementById(
+        `local-${kind}s-tenant`
+      );
+      const filesSelect = document.getElementById(`local-${kind}s-file`);
+      const entries = localData(kind);
+
+      filesSelect.innerHTML = "";
+      const selected = entries.find(
+        (e) => e.tenant_name === tenantsSelect.value
+      );
+      if (!selected) {
+        return;
+      }
+
+      selected.files.forEach((fname) => {
+        const opt = document.createElement("option");
+        opt.value = fname;
+        opt.textContent = fname;
+        filesSelect.appendChild(opt);
+      });
+    }
+
+    async function loadLocalExports() {
+      const resp = await fetch("/api/local-imports");
+      if (!resp.ok) {
+        log("Failed to load local exports: " + resp.statusText);
+        return;
+      }
+      const data = await resp.json();
+      localRuleExports = data.rules || [];
+      localActionExports = data.actions || [];
+      updateLocalSelects("rule");
+      updateLocalSelects("action");
+      log(
+        "Loaded local exports: " +
+          `${localRuleExports.length} rule tenants, ${localActionExports.length} action tenants`
+      );
+    }
+
+    async function importRuleFromLocal() {
+      await importFromLocal("rule");
+    }
+
+    async function importActionFromLocal() {
+      await importFromLocal("action");
+    }
+
+    async function importFromLocal(kind) {
+      const tenantId = getSelectedTenantId();
+      if (!tenantId) {
+        log("No tenant selected");
+        return;
+      }
+
+      const tenantSelect = document.getElementById(`local-${kind}s-tenant`);
+      const fileSelect = document.getElementById(`local-${kind}s-file`);
+      const sourceTenant = tenantSelect.value;
+      const filename = fileSelect.value;
+
+      if (!sourceTenant || !filename) {
+        log("Select exported tenant and file first");
+        return;
+      }
+
+      const path =
+        kind === "rule" ? "/rules/import/local" : "/actions/import/local";
+      log(
+        `Importing ${kind} from local export ${filename} (tenant ${sourceTenant})`
+      );
+      const resp = await fetch(
+        `/api/tenants/${encodeURIComponent(tenantId)}${path}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            source_tenant: sourceTenant,
+            filename: filename,
+          }),
+        }
+      );
+      const data = await resp.json();
+      log("Import result: " + JSON.stringify(data));
+    }
+
     async function importJsonTo(path) {
       const tenantId = getSelectedTenantId();
       if (!tenantId) {
@@ -744,6 +985,7 @@ INDEX_HTML = """
     async function initUi() {
       await loadSettings();
       await loadTenants();
+      await loadLocalExports();
       setTheme(currentTheme);
     }
 
