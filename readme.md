@@ -34,12 +34,15 @@ rules / actions / snapshots.
 
 ## Configuration
 
-The app is configured only through environment variables and Docker secrets.
-Typical variables:
+Connection parameters (AF server address, credentials, SSL verification flag,
+LDAP toggle) are configured from the web UI and stored in `data/settings.json`.
+Use the settings panel to provide an AF server such as `https://afpro.local` and
+fill in login/password or API token secrets. Docker secrets are still supported
+for credentials.
 
-- `AF_URL` – base URL of PTAF PRO, e.g. `https://ptaf.example.com`
+Environment variables remain available for auxiliary options:
+
 - `API_PATH` – API prefix, usually `/api/ptaf/v4`
-- `VERIFY_SSL` – `true` / `false` or path to CA bundle
 - `SNAPSHOT_RETENTION_DAYS` – delete snapshot files older than the specified
   number of days before exporting new ones (empty to disable)
 - `LOG_LEVEL` – `INFO`, `DEBUG`, etc.
@@ -67,17 +70,12 @@ python3 -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
 
-# Export env vars for dev (example)
-export AF_URL="https://ptaf.example.com"
-export API_PATH="/api/ptaf/v4"
-export VERIFY_SSL="false"
-export API_LOGIN="your-login"
-export API_PASSWORD="your-password"
-
 # Запуск веб-приложения с UI
 uvicorn modules.web_main:app --host 0.0.0.0 --port 8000
 
 # UI доступен по адресу http://localhost:8000/ui.
+# Основные настройки (адрес AF, например https://afpro.local, логин/пароль,
+# проверка SSL и флаг LDAP) задаются через панель Settings в UI.
 # Кнопка «Export snapshots for all tenants» запускает экспорт снапшотов (action 1).
 
 

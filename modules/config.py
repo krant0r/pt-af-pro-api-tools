@@ -58,6 +58,8 @@ def _to_opt_bool(val: Optional[str]) -> Optional[bool]:
     """
     if val is None:
         return None
+    if isinstance(val, bool):
+        return val
     s = val.strip()
     if not s:
         return None
@@ -170,12 +172,14 @@ class Config:
 
     def _resolve_verify_ssl(self) -> Any:
         if "VERIFY_SSL" in self.settings:
-            val = self._get_setting("VERIFY_SSL")
-            verify_ssl_env = "" if val is None else str(val)
+            verify_ssl_env = self._get_setting("VERIFY_SSL")
         else:
-            verify_ssl_env = os.getenv("VERIFY_SSL", "true")
+            verify_ssl_env = "true"
 
-        lower = verify_ssl_env.strip().lower()
+        if isinstance(verify_ssl_env, bool):
+            return verify_ssl_env
+
+        lower = str(verify_ssl_env).strip().lower()
         if lower in {"true", "1", "yes", "on"}:
             return True
         if lower in {"false", "0", "no", "off"}:
@@ -245,9 +249,7 @@ class Config:
         # LDAP_AUTH=true/1/...   -> "ldap": true
         # LDAP_AUTH=false/0/...  -> "ldap": false
         ldap_source = self._get_setting("LDAP_AUTH")
-        self.LDAP_AUTH = _to_opt_bool(os.getenv("LDAP_AUTH"))
-        if ldap_source is not None:
-            self.LDAP_AUTH = _to_opt_bool(str(ldap_source))
+        self.LDAP_AUTH = _to_opt_bool(ldap_source)
 
         # ---------- Endpoints ----------
         # Список тенантов

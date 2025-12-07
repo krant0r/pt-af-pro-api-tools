@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 import httpx
@@ -67,6 +68,37 @@ async def _find_tenant(
     return None
 
 
+def _latest_snapshot_index() -> Dict[str, datetime]:
+    latest: Dict[str, float] = {}
+    for path in config.SNAPSHOTS_DIR.glob("*.snapshot.json"):
+        name = path.name
+        if not name.endswith(".snapshot.json"):
+            continue
+
+        base = name[: -len(".snapshot.json")]
+        parts = base.rsplit("_", 1)
+        if len(parts) < 2:
+            continue
+
+        tenant_id = parts[1]
+        try:
+            mtime = path.stat().st_mtime
+        except OSError:
+            continue
+
+        current = latest.get(tenant_id)
+        if current is None or mtime > current:
+            latest[tenant_id] = mtime
+
+    return {
+        tenant_id: datetime.utcfromtimestamp(ts) for tenant_id, ts in latest.items()
+    }
+
+
+def _format_snapshot_ts(dt: datetime) -> str:
+    return dt.replace(microsecond=0).isoformat() + "Z"
+
+
 def _settings_payload() -> Dict[str, Any]:
     return {
         "theme": config.UI_THEME,
@@ -74,6 +106,8 @@ def _settings_payload() -> Dict[str, Any]:
         "af_url": config.AF_URL,
         "api_login": config.API_LOGIN,
         "api_password": config.API_PASSWORD,
+        "verify_ssl": config.VERIFY_SSL,
+        "ldap_auth": config.LDAP_AUTH,
     }
 
 
@@ -95,6 +129,8 @@ async def api_save_settings(request: Request):
         "af_url": "AF_URL",
         "api_login": "API_LOGIN",
         "api_password": "API_PASSWORD",
+        "verify_ssl": "VERIFY_SSL",
+        "ldap_auth": "LDAP_AUTH",
     }
 
     for key, target in mapping.items():
@@ -129,6 +165,12 @@ async def init_snapshots():
 @app.get("/api/tenants")
 async def api_tenants():
     tenants = await _fetch_tenants()
+    snapshots = _latest_snapshot_index()
+    for tenant in tenants:
+        tenant_id = str(tenant.get("id"))
+        ts = snapshots.get(tenant_id)
+        if ts:
+            tenant["last_snapshot"] = _format_snapshot_ts(ts)
     return tenants
 
 
@@ -350,6 +392,13 @@ INDEX_HTML = """
       font-weight: 600;
     }
 
+    .checkbox-row {
+      display: flex;
+      gap: 0.5rem;
+      align-items: center;
+      font-weight: 400;
+    }
+
     .settings-actions {
       display: flex;
       gap: 0.5rem;
@@ -370,6 +419,12 @@ INDEX_HTML = """
     button { margin: 0.25rem 0.5rem 0.25rem 0; }
     select { min-width: 240px; }
     code { background: var(--panel-bg); padding: 0.1rem 0.3rem; border-radius: 4px; }
+
+    .tenant-info {
+      margin-top: 0.35rem;
+      font-size: 0.95rem;
+      opacity: 0.8;
+    }
   </style>
 </head>
 <body data-theme="light">
@@ -411,7 +466,7 @@ INDEX_HTML = """
         <span id="label-af-url-en">AF server URL</span>
         <span id="label-af-url-ru" class="hidden">Адрес сервера AF</span>
       </label>
-      <input type="text" id="setting-af-url" placeholder="https://ptaf.example.com" />
+      <input type="text" id="setting-af-url" placeholder="https://afpro.local" />
     </div>
 
     <div class="settings-row">
@@ -428,6 +483,30 @@ INDEX_HTML = """
         <span id="label-api-password-ru" class="hidden">Пароль AF</span>
       </label>
       <input type="password" id="setting-api-password" placeholder="••••••" />
+    </div>
+
+    <div class="settings-row">
+      <label>
+        <span id="label-verify-ssl-en">Verify SSL certificates</span>
+        <span id="label-verify-ssl-ru" class="hidden">Проверять SSL-сертификаты</span>
+      </label>
+      <label class="checkbox-row">
+        <input type="checkbox" id="setting-verify-ssl" checked />
+        <span id="hint-verify-ssl-en">Disable if using self-signed certificates</span>
+        <span id="hint-verify-ssl-ru" class="hidden">Отключите для самоподписанных сертификатов</span>
+      </label>
+    </div>
+
+    <div class="settings-row">
+      <label>
+        <span id="label-ldap-en">Use LDAP login</span>
+        <span id="label-ldap-ru" class="hidden">Использовать LDAP</span>
+      </label>
+      <label class="checkbox-row">
+        <input type="checkbox" id="setting-ldap-auth" />
+        <span id="hint-ldap-en">Send LDAP flag when requesting tokens</span>
+        <span id="hint-ldap-ru" class="hidden">Передавать флаг LDAP при получении токена</span>
+      </label>
     </div>
 
     <div class="settings-actions">
@@ -458,6 +537,7 @@ INDEX_HTML = """
   <button onclick="loadTenants()">Reload tenants</button>
   <br/>
   <select id="tenant-select"></select>
+  <div id="tenant-info" class="tenant-info"></div>
 
   <h2 id="section-actions-en">2. Actions</h2>
   <h2 id="section-actions-ru" class="hidden">2. Действия</h2>
@@ -509,6 +589,7 @@ INDEX_HTML = """
   <script>
     let currentLang = "ru";
     let currentTheme = "light";
+    let tenantsCache = [];
 
     function themeToggleText(theme, lang) {
       const lightText = lang === "ru" ? "Светлая тема" : "Light theme";
@@ -535,6 +616,10 @@ INDEX_HTML = """
         ["label-af-url-en", "label-af-url-ru"],
         ["label-api-login-en", "label-api-login-ru"],
         ["label-api-password-en", "label-api-password-ru"],
+        ["label-verify-ssl-en", "label-verify-ssl-ru"],
+        ["hint-verify-ssl-en", "hint-verify-ssl-ru"],
+        ["label-ldap-en", "label-ldap-ru"],
+        ["hint-ldap-en", "hint-ldap-ru"],
         ["settings-save-en", "settings-save-ru"],
         ["settings-close-en", "settings-close-ru"],
       ];
@@ -552,6 +637,8 @@ INDEX_HTML = """
       }
 
       setTheme(currentTheme);
+      renderTenants();
+      updateTenantInfo();
     }
 
     function setTheme(theme) {
@@ -601,6 +688,14 @@ INDEX_HTML = """
         document.getElementById("setting-af-url").value = data.af_url || "";
         document.getElementById("setting-api-login").value = data.api_login || "";
         document.getElementById("setting-api-password").value = data.api_password || "";
+        document.getElementById("setting-verify-ssl").checked =
+          data.verify_ssl !== false;
+        const ldapCheckbox = document.getElementById("setting-ldap-auth");
+        if (Object.prototype.hasOwnProperty.call(data, "ldap_auth")) {
+          ldapCheckbox.checked = Boolean(data.ldap_auth);
+        } else {
+          ldapCheckbox.checked = false;
+        }
 
         setLang(currentLang);
         setTheme(currentTheme);
@@ -618,6 +713,8 @@ INDEX_HTML = """
         af_url: document.getElementById("setting-af-url").value,
         api_login: document.getElementById("setting-api-login").value,
         api_password: document.getElementById("setting-api-password").value,
+        verify_ssl: document.getElementById("setting-verify-ssl").checked,
+        ldap_auth: document.getElementById("setting-ldap-auth").checked,
       };
 
       log("Saving settings...");
@@ -649,20 +746,70 @@ INDEX_HTML = """
         return;
       }
       const data = await resp.json();
-      const select = document.getElementById("tenant-select");
-      select.innerHTML = "";
-      data.forEach((t) => {
-        const opt = document.createElement("option");
-        opt.value = t.id;
-        opt.textContent = t.name || t.displayName || t.id;
-        select.appendChild(opt);
-      });
-      log("Loaded " + data.length + " tenants");
+      tenantsCache = Array.isArray(data) ? data : [];
+      renderTenants();
+      updateTenantInfo();
+      log("Loaded " + tenantsCache.length + " tenants");
     }
 
     function getSelectedTenantId() {
       const select = document.getElementById("tenant-select");
       return select.value;
+    }
+
+    function snapshotLabel(dateStr) {
+      if (!dateStr) {
+        return currentLang === "ru" ? "нет снапшотов" : "no snapshots";
+      }
+
+      const d = new Date(dateStr);
+      if (Number.isNaN(d.getTime())) {
+        return dateStr;
+      }
+
+      const prefix = currentLang === "ru" ? "снапшот" : "snapshot";
+      return prefix + ": " + d.toLocaleString();
+    }
+
+    function renderTenants() {
+      const select = document.getElementById("tenant-select");
+      if (!select) return;
+
+      const prev = select.value;
+      select.innerHTML = "";
+
+      tenantsCache.forEach((t) => {
+        const opt = document.createElement("option");
+        opt.value = t.id;
+        const baseName = t.name || t.displayName || t.id;
+        const snapshotText = snapshotLabel(t.last_snapshot);
+        opt.textContent = `${baseName} (${snapshotText})`;
+        select.appendChild(opt);
+      });
+
+      const hasPrev = tenantsCache.some((t) => String(t.id) === prev);
+      if (hasPrev) {
+        select.value = prev;
+      }
+      if (!select.value && tenantsCache.length) {
+        select.value = tenantsCache[0].id;
+      }
+
+      select.onchange = updateTenantInfo;
+    }
+
+    function updateTenantInfo() {
+      const info = document.getElementById("tenant-info");
+      const tenantId = getSelectedTenantId();
+      const tenant = tenantsCache.find((t) => String(t.id) === tenantId);
+      if (!tenant) {
+        info.textContent = "";
+        return;
+      }
+
+      const prefix =
+        currentLang === "ru" ? "Последний снапшот: " : "Last snapshot: ";
+      info.textContent = prefix + snapshotLabel(tenant.last_snapshot);
     }
 
     async function runSnapshots() {
