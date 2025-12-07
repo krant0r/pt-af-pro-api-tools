@@ -12,9 +12,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY requirements.txt ./requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY modules ./modules
-COPY init_snapshots.py ./init_snapshots.py
-
 EXPOSE 8000
 
 # By default run FastAPI web app
