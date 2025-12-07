@@ -242,19 +242,75 @@ INDEX_HTML = """
   <meta charset="utf-8" />
   <title>PTAF PRO Web Tools</title>
   <style>
-    body { font-family: sans-serif; margin: 1.5rem; }
-    .lang-switch { margin-bottom: 1rem; }
+    :root {
+      --bg-color: #ffffff;
+      --text-color: #0f172a;
+      --border-color: #cbd5e1;
+      --panel-bg: #f8fafc;
+      --accent-color: #1d4ed8;
+    }
+
+    body[data-theme="dark"] {
+      --bg-color: #0b1220;
+      --text-color: #e2e8f0;
+      --border-color: #334155;
+      --panel-bg: #111827;
+      --accent-color: #38bdf8;
+    }
+
+    body {
+      font-family: sans-serif;
+      margin: 1.5rem;
+      background: var(--bg-color);
+      color: var(--text-color);
+      transition: background 0.2s ease, color 0.2s ease;
+    }
+
+    button,
+    select,
+    input[type="file"] {
+      background: var(--panel-bg);
+      color: var(--text-color);
+      border: 1px solid var(--border-color);
+      padding: 0.4rem 0.6rem;
+      border-radius: 6px;
+    }
+
+    button:hover,
+    select:focus,
+    input[type="file"]:focus {
+      outline: 1px solid var(--accent-color);
+    }
+
+    .lang-switch {
+      margin-bottom: 1rem;
+      display: flex;
+      gap: 0.5rem;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
     .hidden { display: none; }
-    .log { border: 1px solid #ccc; padding: 0.5rem; max-height: 300px; overflow-y: auto; }
+
+    .log {
+      border: 1px solid var(--border-color);
+      padding: 0.5rem;
+      max-height: 300px;
+      overflow-y: auto;
+      background: var(--panel-bg);
+      border-radius: 8px;
+    }
+
     button { margin: 0.25rem 0.5rem 0.25rem 0; }
     select { min-width: 240px; }
-    code { background: #f2f2f2; padding: 0.1rem 0.3rem; }
+    code { background: var(--panel-bg); padding: 0.1rem 0.3rem; border-radius: 4px; }
   </style>
 </head>
-<body>
+<body data-theme="light">
   <div class="lang-switch">
     <button onclick="setLang('en')">EN</button>
     <button onclick="setLang('ru')">RU</button>
+    <button id="theme-toggle" onclick="toggleTheme()">Dark theme</button>
   </div>
 
   <h1 id="title-en">PTAF PRO Web Tools</h1>
@@ -327,6 +383,7 @@ INDEX_HTML = """
 
   <script>
     let currentLang = "en";
+    let currentTheme = "light";
 
     function setLang(lang) {
       currentLang = lang;
@@ -346,6 +403,18 @@ INDEX_HTML = """
         document.getElementById(en).classList.toggle("hidden", lang !== "en");
         document.getElementById(ru).classList.toggle("hidden", lang !== "ru");
       });
+    }
+
+    function setTheme(theme) {
+      currentTheme = theme;
+      document.body.setAttribute("data-theme", theme);
+      const toggleText = theme === "light" ? "Dark theme" : "Light theme";
+      document.getElementById("theme-toggle").textContent = toggleText;
+    }
+
+    function toggleTheme() {
+      const next = currentTheme === "light" ? "dark" : "light";
+      setTheme(next);
     }
 
     function log(msg) {
@@ -458,6 +527,7 @@ INDEX_HTML = """
 
     // init
     loadTenants().catch((e) => log("Error: " + e));
+    setTheme(currentTheme);
   </script>
 </body>
 </html>
