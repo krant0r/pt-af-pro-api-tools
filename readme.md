@@ -4,6 +4,7 @@ Experimental web-based tools for working with PTAF PRO API.
 
 > **Stage 1**: initialization – authenticate in PTAF, iterate over all tenants,
 > export full configuration snapshots for each tenant and store them as JSON files.
+> Теперь это действие доступно прямо из веб-интерфейса по кнопке «Export snapshots for all tenants».
 
 Later stages will add a browser UI (FastAPI + frontend) for interactive work with
 rules / actions / snapshots.
@@ -28,7 +29,7 @@ rules / actions / snapshots.
 - `modules/auth.py` – token management for PTAF PRO (`/auth/refresh_tokens`, `/auth/access_tokens`).
 - `modules/tenants.py` – helper for fetching list of tenants.
 - `modules/snapshots.py` – stage 1 logic: export snapshots for all tenants.
-- `modules/web_main.py` – FastAPI application (healthcheck and HTTP trigger for snapshots).
+- `modules/web_main.py` – FastAPI application (healthcheck and HTTP trigger for snapshots; встроенный UI).
 - `init_snapshots.py` – CLI entrypoint to run stage 1 from command line / Docker.
 
 ## Configuration
@@ -73,8 +74,11 @@ export VERIFY_SSL="false"
 export API_LOGIN="your-login"
 export API_PASSWORD="your-password"
 
-# Run one-shot snapshot export
-python init_snapshots.py
+# Запуск веб-приложения с UI
+uvicorn modules.web_main:app --host 0.0.0.0 --port 8000
+
+# UI доступен по адресу http://localhost:8000/ui.
+# Кнопка «Export snapshots for all tenants» запускает экспорт снапшотов (action 1).
 
 
 # через env
