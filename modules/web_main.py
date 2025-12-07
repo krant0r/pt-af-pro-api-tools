@@ -23,7 +23,9 @@ from .snapshots import (
     cleanup_old_snapshots,
     export_all_tenant_snapshots,
     export_snapshot_for_tenant,
+    list_local_snapshots,
     latest_snapshot_per_tenant,
+    load_snapshot_file,
 )
 from .tenants import fetch_tenants
 
@@ -186,6 +188,30 @@ async def api_snapshot_tenant(tenant_id: str):
     return {
         "file": str(path),
     }
+
+
+@app.get("/api/snapshots/local")
+async def api_list_snapshots_local():
+    """
+    Отдаёт список локальных снепшотов (только файловая система).
+    """
+
+    return {"snapshots": list_local_snapshots()}
+
+
+@app.get("/api/snapshots/local/{filename}")
+async def api_snapshot_file(filename: str):
+    try:
+        payload = load_snapshot_file(filename)
+    except FileNotFoundError:
+        return JSONResponse(
+            {"error": "Snapshot file not found"},
+            status_code=404,
+        )
+    except ValueError as exc:
+        return JSONResponse({"error": str(exc)}, status_code=400)
+
+    return {"filename": filename, "payload": payload}
 
 
 # ---------------------------------------------------------------------------
@@ -453,6 +479,42 @@ INDEX_HTML = """
       max-width: 520px;
     }
 
+    .menu-panel {
+      max-width: 720px;
+    }
+
+    .menu-list {
+      margin: 0;
+      padding-left: 1.2rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.65rem;
+    }
+
+    .menu-list ol {
+      margin-top: 0.4rem;
+    }
+
+    .menu-list li {
+      line-height: 1.5;
+    }
+
+    .note {
+      font-size: 0.9rem;
+      color: #6b7280;
+    }
+
+    .snapshot-preview {
+      white-space: pre-wrap;
+      background: var(--panel-bg);
+      border: 1px solid var(--border-color);
+      padding: 0.75rem;
+      border-radius: 8px;
+      max-height: 260px;
+      overflow: auto;
+      font-family: "SFMono-Regular", Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+    }
+
     .settings-row {
       display: flex;
       flex-direction: column;
@@ -604,6 +666,105 @@ INDEX_HTML = """
     Эти номера совпадают с кодами действий в CLI-последовательности.
   </p>
 
+  <div class="settings-panel menu-panel">
+    <h2 id="menu-title-en">Interactive menu (mirrors CLI)</h2>
+    <h2 id="menu-title-ru" class="hidden">Интерактивное меню (как в CLI)</h2>
+
+    <ol class="menu-list">
+      <li>
+        <strong>1.</strong>
+        <span id="menu-item1-en">Import rules</span>
+        <span id="menu-item1-ru" class="hidden">Импорт правил</span>
+        —
+        <button onclick="scrollToImport()">Open import block</button>
+      </li>
+      <li>
+        <strong>2.</strong>
+        <span id="menu-item2-en">Export rules</span>
+        <span id="menu-item2-ru" class="hidden">Экспорт правил</span>
+        —
+        <button onclick="runRulesExport()">Run for selected tenant</button>
+      </li>
+      <li>
+        <strong>3.</strong>
+        <span id="menu-item3-en">Policy templates</span>
+        <span id="menu-item3-ru" class="hidden">Шаблоны политик</span>
+        <div class="note" id="menu-note3-en">
+          Snapshot-only UI: templates are not changed directly via API.
+        </div>
+        <div class="note hidden" id="menu-note3-ru">
+          Работаем только со снепшотами: шаблоны политик через API не трогаем.
+        </div>
+      </li>
+      <li>
+        <strong>4.</strong>
+        <span id="menu-item4-en">Traffic settings</span>
+        <span id="menu-item4-ru" class="hidden">Настройки traffic_settings</span>
+        <div class="note" id="menu-note4-en">
+          Use exported snapshots for review; live API changes are disabled here.
+        </div>
+        <div class="note hidden" id="menu-note4-ru">
+          Используйте выгруженные снепшоты для просмотра — прямые API-изменения отключены.
+        </div>
+      </li>
+      <li>
+        <strong>5.</strong>
+        <span id="menu-item5-en">Actions in rules</span>
+        <span id="menu-item5-ru" class="hidden">Управление действиями</span>
+        —
+        <button onclick="scrollToImport()">Work via exports/imports</button>
+      </li>
+      <li>
+        <strong>6.</strong>
+        <span id="menu-item6-en">Get tenant configurations</span>
+        <span id="menu-item6-ru" class="hidden">Получение конфигураций</span>
+        <ol>
+          <li>
+            <span id="menu-item6a-en">Current tenant snapshot</span>
+            <span id="menu-item6a-ru" class="hidden">Снапшот выбранного тенанта</span>
+            —
+            <button onclick="runSingleSnapshot()">Run 6.1</button>
+          </li>
+          <li>
+            <span id="menu-item6b-en">All tenants snapshots</span>
+            <span id="menu-item6b-ru" class="hidden">Снапшоты всех тенантов</span>
+            —
+            <button onclick="runSnapshots()">Run 6.2</button>
+          </li>
+        </ol>
+      </li>
+      <li>
+        <strong>7.</strong>
+        <span id="menu-item7-en">Restore tenant configs (snapshots only)</span>
+        <span id="menu-item7-ru" class="hidden">Восстановление конфигураций (снепшоты)</span>
+        —
+        <button onclick="scrollToSnapshots()">Open snapshot library</button>
+      </li>
+      <li>
+        <strong>8.</strong>
+        <span id="menu-item8-en">Move objects between tenants</span>
+        <span id="menu-item8-ru" class="hidden">Перенос объектов между тенантами</span>
+        <div class="note" id="menu-note8-en">
+          Keep data in exports/imports; direct API migrations are out of scope for this UI.
+        </div>
+        <div class="note hidden" id="menu-note8-ru">
+          Держим данные в экспортах/импортах; прямые миграции по API здесь не выполняются.
+        </div>
+      </li>
+      <li>
+        <strong>9.</strong>
+        <span id="menu-item9-en">Dangerous actions</span>
+        <span id="menu-item9-ru" class="hidden">Опасные действия</span>
+        <div class="note" id="menu-note9-en">
+          Not exposed in the web UI to avoid accidental API calls.
+        </div>
+        <div class="note hidden" id="menu-note9-ru">
+          В веб-интерфейсе не отображаем, чтобы исключить случайные вызовы API.
+        </div>
+      </li>
+    </ol>
+  </div>
+
   <h2 id="section-tenant-en">1. Tenants</h2>
   <h2 id="section-tenant-ru" class="hidden">1. Тенанты</h2>
 
@@ -692,6 +853,63 @@ INDEX_HTML = """
     <button onclick="loadLocalExports()">Reload exported files list</button>
   </div>
 
+  <h2 id="snapshot-library-en">Snapshot library</h2>
+  <h2 id="snapshot-library-ru" class="hidden">Библиотека снепшотов</h2>
+
+  <div class="settings-panel">
+    <p>
+      <span id="snapshot-note-en">
+        Only filesystem exports/imports are used. Choose a snapshot file to inspect
+        or reuse its payload manually.
+      </span>
+      <span id="snapshot-note-ru" class="hidden">
+        Используем только файловые экспорты/импорты. Выбери файл снепшота, чтобы
+        просмотреть его или использовать содержимое вручную.
+      </span>
+    </p>
+
+    <div class="settings-actions">
+      <button onclick="loadLocalSnapshots()" id="snapshot-reload-en">
+        Reload local snapshots
+      </button>
+      <button
+        onclick="loadLocalSnapshots()"
+        id="snapshot-reload-ru"
+        class="hidden"
+      >
+        Обновить список снепшотов
+      </button>
+    </div>
+
+    <div class="settings-row">
+      <label>
+        <span id="snapshot-select-label-en">Available files</span>
+        <span id="snapshot-select-label-ru" class="hidden">Доступные файлы</span>
+      </label>
+      <div class="settings-actions">
+        <select id="snapshot-file-select"></select>
+        <button onclick="viewSnapshotPayload()" id="snapshot-view-en">
+          View payload
+        </button>
+        <button
+          onclick="viewSnapshotPayload()"
+          id="snapshot-view-ru"
+          class="hidden"
+        >
+          Показать содержимое
+        </button>
+      </div>
+    </div>
+
+    <div class="settings-row">
+      <label>
+        <span id="snapshot-preview-title-en">Snapshot content (readonly)</span>
+        <span id="snapshot-preview-title-ru" class="hidden">Содержимое снепшота (только просмотр)</span>
+      </label>
+      <div id="snapshot-preview" class="snapshot-preview">—</div>
+    </div>
+  </div>
+
   <h2 id="log-title-en">Log</h2>
   <h2 id="log-title-ru" class="hidden">Лог</h2>
   <div id="log" class="log"></div>
@@ -701,6 +919,7 @@ INDEX_HTML = """
     let currentTheme = "light";
     let localRuleExports = [];
     let localActionExports = [];
+    let localSnapshots = [];
 
     function themeToggleText(theme, lang) {
       const lightText = lang === "ru" ? "Светлая тема" : "Light theme";
@@ -737,6 +956,28 @@ INDEX_HTML = """
         ["local-import-title-en", "local-import-title-ru"],
         ["local-rules-label-en", "local-rules-label-ru"],
         ["local-actions-label-en", "local-actions-label-ru"],
+        ["menu-title-en", "menu-title-ru"],
+        ["menu-item1-en", "menu-item1-ru"],
+        ["menu-item2-en", "menu-item2-ru"],
+        ["menu-item3-en", "menu-item3-ru"],
+        ["menu-note3-en", "menu-note3-ru"],
+        ["menu-item4-en", "menu-item4-ru"],
+        ["menu-note4-en", "menu-note4-ru"],
+        ["menu-item5-en", "menu-item5-ru"],
+        ["menu-item6-en", "menu-item6-ru"],
+        ["menu-item6a-en", "menu-item6a-ru"],
+        ["menu-item6b-en", "menu-item6b-ru"],
+        ["menu-item7-en", "menu-item7-ru"],
+        ["menu-item8-en", "menu-item8-ru"],
+        ["menu-note8-en", "menu-note8-ru"],
+        ["menu-item9-en", "menu-item9-ru"],
+        ["menu-note9-en", "menu-note9-ru"],
+        ["snapshot-library-en", "snapshot-library-ru"],
+        ["snapshot-note-en", "snapshot-note-ru"],
+        ["snapshot-select-label-en", "snapshot-select-label-ru"],
+        ["snapshot-preview-title-en", "snapshot-preview-title-ru"],
+        ["snapshot-reload-en", "snapshot-reload-ru"],
+        ["snapshot-view-en", "snapshot-view-ru"],
       ];
       ids.forEach(([en, ru]) => {
         document.getElementById(en).classList.toggle("hidden", lang !== "en");
@@ -763,6 +1004,21 @@ INDEX_HTML = """
       if (themeSelect) {
         themeSelect.value = theme;
       }
+    }
+
+    function scrollToElementById(id) {
+      const el = document.getElementById(id);
+      if (el) {
+        el.scrollIntoView({ behavior: "smooth", block: "start" });
+      }
+    }
+
+    function scrollToImport() {
+      scrollToElementById("section-import-en");
+    }
+
+    function scrollToSnapshots() {
+      scrollToElementById("snapshot-library-en");
     }
 
     function toggleTheme() {
@@ -904,6 +1160,26 @@ INDEX_HTML = """
       log("Snapshots result: " + JSON.stringify(data));
     }
 
+    async function runSingleSnapshot() {
+      const tenantId = getSelectedTenantId();
+      if (!tenantId) {
+        log("No tenant selected");
+        return;
+      }
+
+      log(
+        "Running action 6.1 (snapshot for tenant " +
+          tenantId +
+          ") [sequence: 6.1]"
+      );
+      const resp = await fetch(
+        "/api/tenants/" + encodeURIComponent(tenantId) + "/snapshot",
+        { method: "POST" }
+      );
+      const data = await resp.json();
+      log("Single snapshot result: " + JSON.stringify(data));
+    }
+
     async function runRulesExport() {
       const tenantId = getSelectedTenantId();
       if (!tenantId) {
@@ -1014,6 +1290,64 @@ INDEX_HTML = """
       );
     }
 
+    function renderSnapshotSelect() {
+      const select = document.getElementById("snapshot-file-select");
+      select.innerHTML = "";
+
+      localSnapshots.forEach((snap) => {
+        const opt = document.createElement("option");
+        const labelParts = [];
+        if (snap.timestamp) labelParts.push(snap.timestamp);
+        if (snap.tenant_label) labelParts.push(snap.tenant_label);
+        if (snap.tenant_id) labelParts.push(`#${snap.tenant_id}`);
+        opt.value = snap.filename;
+        opt.textContent = labelParts.join(" · ") || snap.filename;
+        select.appendChild(opt);
+      });
+    }
+
+    async function loadLocalSnapshots() {
+      const resp = await fetch("/api/snapshots/local");
+      if (!resp.ok) {
+        log("Failed to load local snapshots: " + resp.statusText);
+        return;
+      }
+      const data = await resp.json();
+      localSnapshots = data.snapshots || [];
+      renderSnapshotSelect();
+      if (!localSnapshots.length) {
+        const preview = document.getElementById("snapshot-preview");
+        if (preview) preview.textContent = "—";
+      }
+      log("Loaded local snapshots: " + localSnapshots.length);
+    }
+
+    async function viewSnapshotPayload() {
+      const select = document.getElementById("snapshot-file-select");
+      const filename = select.value;
+      if (!filename) {
+        log("Select snapshot file first");
+        return;
+      }
+
+      log("Opening snapshot from filesystem: " + filename);
+      const resp = await fetch(
+        "/api/snapshots/local/" + encodeURIComponent(filename)
+      );
+      const data = await resp.json();
+      if (!resp.ok) {
+        log("Snapshot read failed: " + JSON.stringify(data));
+        return;
+      }
+
+      const preview = document.getElementById("snapshot-preview");
+      if (preview) {
+        preview.textContent = JSON.stringify(data.payload, null, 2);
+      }
+
+      log("Snapshot loaded successfully: " + filename);
+    }
+
     async function importRuleFromLocal() {
       await importFromLocal("rule");
     }
@@ -1086,6 +1420,7 @@ INDEX_HTML = """
       await loadSettings();
       await loadTenants();
       await loadLocalExports();
+      await loadLocalSnapshots();
       setTheme(currentTheme);
     }
 

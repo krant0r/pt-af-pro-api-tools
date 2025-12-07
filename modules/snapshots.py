@@ -76,7 +76,10 @@ def _tenant_id_from_snapshot_path(path: Path) -> Optional[str]:
     parts = path.stem.rsplit("_", 1)
     if len(parts) < 2:
         return None
-    return parts[-1]
+    tenant_part = parts[-1]
+    if tenant_part.endswith(".snapshot"):
+        tenant_part = tenant_part[: -len(".snapshot")]
+    return tenant_part
 
 
 def latest_snapshot_per_tenant() -> Dict[str, str]:
@@ -103,6 +106,77 @@ def latest_snapshot_per_tenant() -> Dict[str, str]:
     return {
         tid: dt.replace(microsecond=0).isoformat() + "Z" for tid, dt in latest.items()
     }
+
+
+def _snapshot_metadata(path: Path) -> Dict[str, Any]:
+    """
+    Формирует короткое описание файла снапшота для UI.
+    """
+
+    try:
+        mtime = datetime.utcfromtimestamp(path.stat().st_mtime)
+        size = path.stat().st_size
+    except OSError:
+        mtime = None
+        size = 0
+
+    base_name = path.name
+    if base_name.endswith(".snapshot.json"):
+        base_name = base_name[: -len(".json")]
+
+    parts = base_name.split("_")
+    ts = parts[0] if parts else ""
+    tenant_label = " ".join(parts[1:-1]).strip() if len(parts) > 2 else None
+
+    return {
+        "filename": path.name,
+        "tenant_id": _tenant_id_from_snapshot_path(path),
+        "tenant_label": tenant_label or None,
+        "timestamp": ts or None,
+        "modified_at": mtime.replace(microsecond=0).isoformat() + "Z"
+        if mtime
+        else None,
+        "size_bytes": size,
+    }
+
+
+def list_local_snapshots() -> List[Dict[str, Any]]:
+    """
+    Возвращает список локальных файлов снапшотов из каталога данных.
+    API вызовы не используются — только чтение файлов.
+    """
+
+    snapshots: List[Dict[str, Any]] = []
+    for path in sorted(
+        config.SNAPSHOTS_DIR.glob("*.snapshot.json"),
+        key=lambda p: p.stat().st_mtime if p.exists() else 0,
+        reverse=True,
+    ):
+        if not path.is_file():
+            continue
+        snapshots.append(_snapshot_metadata(path))
+
+    return snapshots
+
+
+def load_snapshot_file(filename: str) -> Dict[str, Any]:
+    """
+    Читает содержимое файла снапшота по имени файла.
+
+    Имя должно оканчиваться на `.snapshot.json`, путь traversal запрещён.
+    """
+
+    if "/" in filename or ".." in Path(filename).parts:
+        raise ValueError("Invalid snapshot filename")
+
+    if not filename.endswith(".snapshot.json"):
+        raise ValueError("Snapshot filename must end with .snapshot.json")
+
+    path = config.SNAPSHOTS_DIR / filename
+    if not path.is_file():
+        raise FileNotFoundError(filename)
+
+    return json.loads(path.read_text(encoding="utf-8"))
 
 
 async def export_snapshot_for_tenant(
