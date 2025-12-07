@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 import json
-import re
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Dict, List, Optional
+import re
 
 import httpx
 from loguru import logger
@@ -64,6 +64,45 @@ def cleanup_old_snapshots() -> int:
         )
 
     return removed
+
+
+def _tenant_id_from_snapshot_path(path: Path) -> Optional[str]:
+    """
+    Extract tenant ID from snapshot filename.
+
+    Filenames follow pattern: ``{ts}_{name}_{tenant_id}.snapshot.json``.
+    """
+
+    parts = path.stem.rsplit("_", 1)
+    if len(parts) < 2:
+        return None
+    return parts[-1]
+
+
+def latest_snapshot_per_tenant() -> Dict[str, str]:
+    """
+    Returns mapping tenant_id -> latest snapshot mtime (ISO string, UTC).
+    """
+
+    latest: Dict[str, datetime] = {}
+
+    for path in config.SNAPSHOTS_DIR.glob("*.snapshot.json"):
+        tenant_id = _tenant_id_from_snapshot_path(path)
+        if not tenant_id:
+            continue
+
+        try:
+            mtime = datetime.utcfromtimestamp(path.stat().st_mtime)
+        except OSError:
+            continue
+
+        current = latest.get(tenant_id)
+        if not current or mtime > current:
+            latest[tenant_id] = mtime
+
+    return {
+        tid: dt.replace(microsecond=0).isoformat() + "Z" for tid, dt in latest.items()
+    }
 
 
 async def export_snapshot_for_tenant(

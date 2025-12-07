@@ -123,7 +123,7 @@ class Config:
         self.API_TOKEN: str = ""
         self.API_LOGIN: str = ""
         self.API_PASSWORD: str = ""
-        self.LDAP_AUTH: Optional[bool] = None
+        self.LDAP_AUTH: bool = False
         self.TENANTS_ENDPOINT: str = ""
         self.SNAPSHOT_ENDPOINT: str = ""
         self.RULES_ENDPOINT: str = ""
@@ -169,18 +169,29 @@ class Config:
         return _read_secret(env_var, file_env_var)
 
     def _resolve_verify_ssl(self) -> Any:
-        if "VERIFY_SSL" in self.settings:
-            val = self._get_setting("VERIFY_SSL")
-            verify_ssl_env = "" if val is None else str(val)
-        else:
-            verify_ssl_env = os.getenv("VERIFY_SSL", "true")
+        if "VERIFY_SSL" not in self.settings:
+            return True
 
-        lower = verify_ssl_env.strip().lower()
+        val = self._get_setting("VERIFY_SSL")
+        if isinstance(val, bool):
+            return val
+
+        verify_ssl_str = "" if val is None else str(val)
+        lower = verify_ssl_str.strip().lower()
         if lower in {"true", "1", "yes", "on"}:
             return True
         if lower in {"false", "0", "no", "off"}:
             return False
-        return verify_ssl_env
+        if not lower:
+            return True
+        return verify_ssl_str
+
+    def _resolve_ldap_auth(self) -> bool:
+        val = self._get_setting("LDAP_AUTH") if "LDAP_AUTH" in self.settings else None
+        if isinstance(val, bool):
+            return val
+        parsed = _to_opt_bool(str(val)) if val is not None else None
+        return bool(parsed)
 
     def _resolve_retention_days(self) -> Optional[int]:
         if "SNAPSHOT_RETENTION_DAYS" in self.settings:
@@ -240,14 +251,10 @@ class Config:
             "API_PASSWORD", "API_PASSWORD", "API_PASSWORD_FILE"
         )
 
-        # Необязательный флаг LDAP:
-        # LDAP_AUTH не задан     -> не отправляем "ldap"
-        # LDAP_AUTH=true/1/...   -> "ldap": true
-        # LDAP_AUTH=false/0/...  -> "ldap": false
-        ldap_source = self._get_setting("LDAP_AUTH")
-        self.LDAP_AUTH = _to_opt_bool(os.getenv("LDAP_AUTH"))
-        if ldap_source is not None:
-            self.LDAP_AUTH = _to_opt_bool(str(ldap_source))
+        # Необязательный флаг LDAP (переключается в UI):
+        # LDAP_AUTH=true  -> "ldap": true
+        # LDAP_AUTH=false -> "ldap": false
+        self.LDAP_AUTH = self._resolve_ldap_auth()
 
         # ---------- Endpoints ----------
         # Список тенантов

@@ -23,6 +23,7 @@ from .snapshots import (
     cleanup_old_snapshots,
     export_all_tenant_snapshots,
     export_snapshot_for_tenant,
+    latest_snapshot_per_tenant,
 )
 from .tenants import fetch_tenants
 
@@ -63,7 +64,17 @@ async def _fetch_tenants() -> List[Dict[str, Any]]:
         verify=config.VERIFY_SSL,
         timeout=config.REQUEST_TIMEOUT,
     ) as client:
-        return await fetch_tenants(client, token_manager)
+        tenants = await fetch_tenants(client, token_manager)
+
+    last_snapshots = latest_snapshot_per_tenant()
+    for tenant in tenants:
+        tenant_id = str(tenant.get("id") or "")
+        if tenant_id and tenant_id in last_snapshots:
+            tenant["last_snapshot_at"] = last_snapshots[tenant_id]
+        else:
+            tenant["last_snapshot_at"] = None
+
+    return tenants
 
 
 async def _find_tenant(
@@ -83,6 +94,8 @@ def _settings_payload() -> Dict[str, Any]:
         "af_url": config.AF_URL,
         "api_login": config.API_LOGIN,
         "api_password": config.API_PASSWORD,
+        "verify_ssl": config.VERIFY_SSL,
+        "ldap_auth": config.LDAP_AUTH,
         "snapshot_retention_days": config.SNAPSHOT_RETENTION_DAYS,
     }
 
@@ -105,6 +118,8 @@ async def api_save_settings(request: Request):
         "af_url": "AF_URL",
         "api_login": "API_LOGIN",
         "api_password": "API_PASSWORD",
+        "verify_ssl": "VERIFY_SSL",
+        "ldap_auth": "LDAP_AUTH",
         "snapshot_retention_days": "SNAPSHOT_RETENTION_DAYS",
     }
 
@@ -510,7 +525,7 @@ INDEX_HTML = """
         <span id="label-af-url-en">AF server URL</span>
         <span id="label-af-url-ru" class="hidden">Адрес сервера AF</span>
       </label>
-      <input type="text" id="setting-af-url" placeholder="https://ptaf.example.com" />
+      <input type="text" id="setting-af-url" placeholder="https://afpro.local" />
     </div>
 
     <div class="settings-row">
@@ -527,6 +542,30 @@ INDEX_HTML = """
         <span id="label-api-password-ru" class="hidden">Пароль AF</span>
       </label>
       <input type="password" id="setting-api-password" placeholder="••••••" />
+    </div>
+
+    <div class="settings-row">
+      <label>
+        <span id="label-verify-ssl-en">Verify SSL certificates</span>
+        <span id="label-verify-ssl-ru" class="hidden">Проверять SSL сертификаты</span>
+      </label>
+      <label>
+        <input type="checkbox" id="setting-verify-ssl" />
+        <span id="hint-verify-ssl-en">Enable TLS verification for AF API</span>
+        <span id="hint-verify-ssl-ru" class="hidden">Включить проверку TLS для AF API</span>
+      </label>
+    </div>
+
+    <div class="settings-row">
+      <label>
+        <span id="label-ldap-auth-en">Use LDAP authentication</span>
+        <span id="label-ldap-auth-ru" class="hidden">Использовать LDAP авторизацию</span>
+      </label>
+      <label>
+        <input type="checkbox" id="setting-ldap-auth" />
+        <span id="hint-ldap-auth-en">Send ldap=true when requesting tokens</span>
+        <span id="hint-ldap-auth-ru" class="hidden">Отправлять ldap=true при получении токена</span>
+      </label>
     </div>
 
     <div class="settings-row">
@@ -687,6 +726,10 @@ INDEX_HTML = """
         ["label-af-url-en", "label-af-url-ru"],
         ["label-api-login-en", "label-api-login-ru"],
         ["label-api-password-en", "label-api-password-ru"],
+        ["label-verify-ssl-en", "label-verify-ssl-ru"],
+        ["hint-verify-ssl-en", "hint-verify-ssl-ru"],
+        ["label-ldap-auth-en", "label-ldap-auth-ru"],
+        ["hint-ldap-auth-en", "hint-ldap-auth-ru"],
         ["label-snapshot-retention-en", "label-snapshot-retention-ru"],
         ["settings-save-en", "settings-save-ru"],
         ["settings-close-en", "settings-close-ru"],
@@ -738,6 +781,21 @@ INDEX_HTML = """
       el.prepend(line);
     }
 
+    function formatSnapshotInfo(dateStr) {
+      if (!dateStr) {
+        return currentLang === "ru" ? "без снепшота" : "no snapshot";
+      }
+
+      const parsed = new Date(dateStr);
+      const formatted = Number.isNaN(parsed.getTime())
+        ? dateStr
+        : parsed.toLocaleString();
+
+      return currentLang === "ru"
+        ? `снапшот: ${formatted}`
+        : `snapshot: ${formatted}`;
+    }
+
     async function loadSettings() {
       log("Loading settings...");
       try {
@@ -757,6 +815,10 @@ INDEX_HTML = """
         document.getElementById("setting-af-url").value = data.af_url || "";
         document.getElementById("setting-api-login").value = data.api_login || "";
         document.getElementById("setting-api-password").value = data.api_password || "";
+        document.getElementById("setting-verify-ssl").checked =
+          data.verify_ssl !== false;
+        document.getElementById("setting-ldap-auth").checked =
+          !!data.ldap_auth;
         document.getElementById("setting-snapshot-retention").value =
           data.snapshot_retention_days ?? 30;
 
@@ -776,6 +838,8 @@ INDEX_HTML = """
         af_url: document.getElementById("setting-af-url").value,
         api_login: document.getElementById("setting-api-login").value,
         api_password: document.getElementById("setting-api-password").value,
+        verify_ssl: document.getElementById("setting-verify-ssl").checked,
+        ldap_auth: document.getElementById("setting-ldap-auth").checked,
         snapshot_retention_days: (() => {
           const val = document
             .getElementById("setting-snapshot-retention")
@@ -819,7 +883,9 @@ INDEX_HTML = """
       data.forEach((t) => {
         const opt = document.createElement("option");
         opt.value = t.id;
-        opt.textContent = t.name || t.displayName || t.id;
+        const name = t.name || t.displayName || t.id;
+        const snapshotInfo = formatSnapshotInfo(t.last_snapshot_at);
+        opt.textContent = `${name} — ${snapshotInfo}`;
         select.appendChild(opt);
       });
       log("Loaded " + data.length + " tenants");
