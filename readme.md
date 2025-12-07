@@ -39,10 +39,13 @@ Typical variables:
 
 - `AF_URL` – base URL of PTAF PRO, e.g. `https://ptaf.example.com`
 - `API_PATH` – API prefix, usually `/api/ptaf/v4`
-- `VERIFY_SSL` – `true` / `false` or path to CA bundle
 - `SNAPSHOT_RETENTION_DAYS` – delete snapshot files older than the specified
   number of days before exporting new ones (empty to disable)
 - `LOG_LEVEL` – `INFO`, `DEBUG`, etc.
+
+UI settings (stored in `data/settings.json`) control TLS verification for AF API
+requests and the LDAP authentication flag; they can be toggled from the web
+interface without editing environment variables.
 
 Authentication (choose **one** approach):
 
@@ -68,9 +71,8 @@ source venv/bin/activate
 pip install -r requirements.txt
 
 # Export env vars for dev (example)
-export AF_URL="https://ptaf.example.com"
+export AF_URL="https://afpro.local"
 export API_PATH="/api/ptaf/v4"
-export VERIFY_SSL="false"
 export API_LOGIN="your-login"
 export API_PASSWORD="your-password"
 
