@@ -3,63 +3,37 @@ services:
     build: .
     image: pt-af-pro-api-tools
     restart: unless-stopped
+    env_file: .env
     ports:
       - "8000:8000"
-    environment:
-      # PTAF connection (NO SECRETS here – example values only)
-      AF_URL: "https://ptaf.example.com"
-      API_PATH: "/api/ptaf/v4"
-
-      # SSL verification: "true" / "false" or path to CA bundle
-      VERIFY_SSL: "true"
-
-      # Logging
-      LOG_LEVEL: "INFO"
-
-      # Choose ONE auth method:
-      #  1) Static token via Docker secret:
-      #     API_TOKEN_FILE=/run/secrets/ptaf_api_token
-      #  2) Username/password via Docker secrets:
-      #     API_LOGIN_FILE=/run/secrets/ptaf_api_login
-      #     API_PASSWORD_FILE=/run/secrets/ptaf_api_password
-
-      # Example: enable username/password auth using secrets:
-      API_LOGIN_FILE: "/run/secrets/ptaf_api_login"
-      API_PASSWORD_FILE: "/run/secrets/ptaf_api_password"
-      # API_TOKEN_FILE: "/run/secrets/ptaf_api_token"
-
+    user: "${UID}:${GID}"
     secrets:
       - ptaf_api_login
       - ptaf_api_password
       # - ptaf_api_token
 
     volumes:
-      - ./modules:/app/modules
-      - ./init_snapshots.py:/app/init_snapshots.py
-      - ./snapshots:/app/snapshots
+      - ./modules:/home/app/modules
+      - ./init_snapshots.py:/home/app/init_snapshots.py
+      - ./snapshots:/home/app/snapshots
 
   init-snapshots:
     image: pt-af-pro-api-tools
     restart: "no"
+    env_file: .env
+    user: "${UID}:${GID}"
     depends_on:
       - app
     command: ["python", "init_snapshots.py"]
-    environment:
-      AF_URL: "https://ptaf.example.com"
-      API_PATH: "/api/ptaf/v4"
-      VERIFY_SSL: "true"
-      LOG_LEVEL: "INFO"
-      API_LOGIN_FILE: "/run/secrets/ptaf_api_login"
-      API_PASSWORD_FILE: "/run/secrets/ptaf_api_password"
-      # API_TOKEN_FILE: "/run/secrets/ptaf_api_token"
+
     secrets:
       - ptaf_api_login
       - ptaf_api_password
       # - ptaf_api_token
     volumes:
-      - ./modules:/app/modules
-      - ./init_snapshots.py:/app/init_snapshots.py
-      - ./snapshots:/app/snapshots
+      - ./modules:/home/app/modules
+      - ./init_snapshots.py:/home/app/init_snapshots.py
+      - ./snapshots:/home/app/snapshots
 
 secrets:
   ptaf_api_login:
