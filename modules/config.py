@@ -1,14 +1,27 @@
-# modules/config.py
 from __future__ import annotations
+
+"""
+Central configuration for pt-af-pro-api-tools.
+
+All values are taken from environment variables so that the code can be safely
+used in Docker / docker-compose and on bare metal.
+
+Secrets (tokens / passwords) are expected to be passed either:
+- directly via env variables, e.g. API_PASSWORD=...; or
+- via "FILE" companions, e.g. API_PASSWORD_FILE=/run/secrets/waf_api_password
+
+In the second case the file content is read and used as the value.
+"""
 
 import os
 from pathlib import Path
-from typing import Optional, List
+from typing import Optional
 
 from dotenv import load_dotenv
 
+# Load .env if present (useful for local development, not required in Docker)
+load_dotenv()
 
-# ───────────────────────── helpers ─────────────────────────
 
 def _to_bool(val: Optional[str], default: bool = False) -> bool:
     if val is None:
@@ -17,131 +30,132 @@ def _to_bool(val: Optional[str], default: bool = False) -> bool:
 
 
 def _to_opt_bool(val: Optional[str]) -> Optional[bool]:
-    """Преобразует строку в Optional[bool].
+    """
+    Ternary bool parser:
 
-    None/""        -> None
-    "1,true,yes"   -> True
-    "0,false,no"   -> False
-    Любое другое    -> None (чтобы не сломать авторизацию).
+    None / ""          -> None
+    "1,true,yes,on,.." -> True
+    "0,false,no,off,.."-> False
+    Any other garbage  -> None (fail-safe).
     """
     if val is None:
         return None
-    s = str(val).strip()
+    s = val.strip()
     if not s:
         return None
-    s_low = s.lower()
-    if s_low in {"1", "true", "yes", "on", "y", "t"}:
+    low = s.lower()
+    if low in {"1", "true", "yes", "on", "y", "t"}:
         return True
-    if s_low in {"0", "false", "no", "off", "n", "f"}:
+    if low in {"0", "false", "no", "off", "n", "f"}:
         return False
     return None
 
 
-def _to_int(val: Optional[str], default: int = 0) -> int:
-    try:
-        return int(str(val).strip())
-    except Exception:
-        return default
+def _read_secret(var_name: str, file_var_name: str) -> str:
+    """
+    Helper for reading secrets in a Docker-friendly way.
 
+    Priority:
+      1. *_FILE env var pointing to file with secret.
+      2. Plain env var.
 
-def _to_float(val: Optional[str], default: float = 0.0) -> float:
-    try:
-        return float(str(val).strip())
-    except Exception:
-        return default
+    Returns empty string if nothing found.
+    """
+    file_path = os.getenv(file_var_name)
+    if file_path:
+        try:
+            content = Path(file_path).read_text(encoding="utf-8").strip()
+            if content:
+                return content
+        except Exception:
+            # Do not crash on bad secret file, just fall back to env var.
+            pass
+    return (os.getenv(var_name) or "").strip()
 
-
-def _to_list(val: Optional[str]) -> List[str]:
-    """Преобразует строку вида "a, b, c" в ["a","b","c"]."""
-    if not val:
-        return []
-    parts = [p.strip() for p in str(val).split(",")]
-    return [p for p in parts if p]
-
-
-# ───────────────────────── config ─────────────────────────
 
 class Config:
-    """Единая точка настроек из .env (если есть), с безопасными дефолтами."""
-
     def __init__(self) -> None:
-        # Загружаем .env из текущей директории (если есть)
-        load_dotenv(override=False)
+        # ---------- Basic paths ----------
+        self.BASE_DIR: Path = Path(__file__).resolve().parent.parent
 
-        # ── Логи
+        # ---------- Logging ----------
         self.LOG_LEVEL: str = os.getenv("LOG_LEVEL", "INFO").upper()
-        # Совпадает с тем, что видно у вас в контейнере:
-        self.LOG_FILE: Path = Path(os.getenv("LOG_FILE", "/home/app/af-pro-api.log")).resolve()
+        log_file = os.getenv("LOG_FILE", str(self.BASE_DIR / "logs" / "ptaf-web.log"))
+        self.LOG_FILE: Path = Path(log_file)
 
-        # ── Файл для DataCollector (чтобы не падало на DATA_FILE)
-        self.DATA_FILE: Path = Path(os.getenv("DATA_FILE", "/home/app/af-pro-api-data.json")).resolve()
+        # ---------- WAF API connection ----------
+        # Base URL of PTAF PRO instance, e.g. "https://ptaf.example.com"
+        self.AF_URL: str = os.getenv("AF_URL", "").rstrip("/")
 
-        # ── Базовый URL API AF
-        self.AF_URL: str = os.getenv("AF_URL", "https://example.invalid").rstrip("/")
+        # API path prefix, usually "/api/ptaf/v4"
+        self.API_PATH: str = os.getenv("API_PATH", "/api/ptaf/v4").rstrip("/")
 
-        # ── Режимы
-        self.VERIFY_SSL: bool = _to_bool(os.getenv("VERIFY_SSL"), True)
-        # READ_ONLY учитывается: при True PATCH-запросы не выполняются, только логируются
-        self.READ_ONLY: bool = _to_bool(os.getenv("READ_ONLY"), False)
-        # Актуально только если ваш код читает/пишет локальный кеш
-        self.LOAD_FROM_FILE: bool = _to_bool(os.getenv("LOAD_FROM_FILE"), False)
+        # SSL verification: "true"/"false" or path to CA/cert file
+        verify_ssl_env = os.getenv("VERIFY_SSL", "true")
+        lower = verify_ssl_env.strip().lower()
+        if lower in {"true", "1", "yes", "on"}:
+            self.VERIFY_SSL = True
+        elif lower in {"false", "0", "no", "off"}:
+            self.VERIFY_SSL = False
+        else:
+            # Treat as path to CA/cert
+            self.VERIFY_SSL = verify_ssl_env
 
-        # ── Фильтры итерации (имена, через запятую)
-        self.ONLY_TENANTS: List[str] = _to_list(os.getenv("ONLY_TENANTS"))
-        self.SKIP_TENANTS: List[str] = _to_list(os.getenv("SKIP_TENANTS"))
-        self.ONLY_APPS: List[str] = _to_list(os.getenv("ONLY_APPS"))
-        self.SKIP_APPS: List[str] = _to_list(os.getenv("SKIP_APPS"))
+        # Request timeout in seconds
+        self.REQUEST_TIMEOUT: float = float(os.getenv("REQUEST_TIMEOUT", "30"))
 
-        # ── Пара действий для доп. пайплайна (можно оставить пустыми — тогда он пропустится)
-        self.ACTION_ADD_NAME: str = (os.getenv("ACTION_ADD_NAME") or "").strip()
-        self.ACTION_REMOVE_NAME: str = (os.getenv("ACTION_REMOVE_NAME") or "").strip()
+        # ---------- Auth credentials ----------
+        # Static API token (if present, username/password are ignored)
+        self.API_TOKEN: str = _read_secret("API_TOKEN", "API_TOKEN_FILE")
 
-        # ── SIEM action (используется в pipeline)
-        self.SIEM_IP: str = os.getenv("SIEM_IP", "127.0.0.1")
-        self.SIEM_PORT: int = _to_int(os.getenv("SIEM_PORT"), 1468)
-        self.SIEM_ACTION_NAME: str = os.getenv("SIEM_ACTION_NAME", "Send to SIEM")
+        # Credentials for JWT-based auth
+        self.API_LOGIN: str = _read_secret("API_LOGIN", "API_LOGIN_FILE")
+        self.API_PASSWORD: str = _read_secret("API_PASSWORD", "API_PASSWORD_FILE")
 
-        # ── Тайминги/ретраи
-        self.REQUEST_TIMEOUT: float = _to_float(os.getenv("REQUEST_TIMEOUT"), 30.0)
-        self.PATCH_TIMEOUT: float = _to_float(os.getenv("PATCH_TIMEOUT"), 60.0)
-        self.TOKEN_REFRESH_SKEW: int = _to_int(os.getenv("TOKEN_REFRESH_SKEW"), 120)
-        self.MAX_RETRIES: int = _to_int(os.getenv("MAX_RETRIES"), 3)
-
-        # ── Аутентификация
-        # Можно хранить токен напрямую или через файл:
-        #   API_TOKEN=...   ИЛИ   API_TOKEN_FILE=/run/secrets/api_token
-        self.API_TOKEN: Optional[str] = self._read_api_token()
-        self.API_LOGIN: str = os.getenv("API_LOGIN", "").strip()
-        self.API_PASSWORD: str = os.getenv("API_PASSWORD", "").strip()
-
-        # Для эндпойнта логина:
-        #   LDAP_AUTH не задан  -> поле "ldap" в запросе НЕ отправляем
-        #   LDAP_AUTH=true/1    -> "ldap": true
-        #   LDAP_AUTH=false/0   -> "ldap": false
+        # Optional LDAP auth toggle:
+        #   LDAP_AUTH not set  -> do not send "ldap" at all
+        #   LDAP_AUTH=true/1   -> send "ldap": true
+        #   LDAP_AUTH=false/0  -> send "ldap": false
         self.LDAP_AUTH: Optional[bool] = _to_opt_bool(os.getenv("LDAP_AUTH"))
 
-    # ── helpers ─────────────────────────────────────────────
+        # ---------- Snapshot / tenants endpoints ----------
+        # These match PTAF PRO defaults but can be overridden via env if needed
+        self.TENANTS_ENDPOINT: str = os.getenv(
+            "TENANTS_ENDPOINT", f"{self.API_PATH}/auth/account/tenants"
+        )
 
-    def _read_api_token(self) -> Optional[str]:
-        """Можно хранить токен в отдельном файле (API_TOKEN_FILE), либо в переменной (API_TOKEN)."""
-        token_file = os.getenv("API_TOKEN_FILE")
-        if token_file:
-            try:
-                content = Path(token_file).read_text(encoding="utf-8").strip()
-                if content:
-                    return content
-            except Exception:
-                pass
-        env_token = os.getenv("API_TOKEN")
-        return env_token.strip() if env_token else None
+        # Global snapshot endpoint (import/export full config of *current* tenant)
+        self.SNAPSHOT_ENDPOINT: str = os.getenv(
+            "SNAPSHOT_ENDPOINT", f"{self.API_PATH}/config/snapshot"
+        )
+
+        # Directory where JSON snapshots of tenants are stored
+        self.SNAPSHOTS_DIR: Path = Path(
+            os.getenv("SNAPSHOTS_DIR", str(self.BASE_DIR / "snapshots"))
+        ).resolve()
+
+        # Ensure directories exist for local runs (in Docker volumes will be mounted)
+        self.LOG_FILE.parent.mkdir(parents=True, exist_ok=True)
+        self.SNAPSHOTS_DIR.mkdir(parents=True, exist_ok=True)
 
     @property
     def auth_method(self) -> str:
+        """
+        Returns which auth method is configured:
+
+        - "token"    — static API_TOKEN
+        - "password" — username/password (JWT)
+
+        Raises if nothing is configured.
+        """
         if self.API_TOKEN:
             return "token"
         if self.API_LOGIN and self.API_PASSWORD:
             return "password"
-        raise ValueError("No auth credentials found: set API_TOKEN or API_LOGIN/API_PASSWORD")
+        raise ValueError(
+            "No auth credentials configured. "
+            "Set API_TOKEN or API_LOGIN/API_PASSWORD (or *_FILE variants)."
+        )
 
 
 config = Config()
