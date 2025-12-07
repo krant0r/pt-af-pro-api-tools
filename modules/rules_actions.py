@@ -186,3 +186,85 @@ async def import_action_payload(
 
 def load_json_file(path: Path) -> Dict[str, Any]:
     return json.loads(path.read_text(encoding="utf-8"))
+
+
+def _tenant_label_from_dir(dir_name: str) -> Tuple[str, Optional[str]]:
+    """
+    Возвращает человекочитаемое имя тенанта и id (если он есть в имени каталога).
+    Каталоги экспорта имеют вид <slug>_<id>.
+    """
+
+    if "_" in dir_name:
+        base, _, tenant_id = dir_name.rpartition("_")
+    else:
+        base, tenant_id = dir_name, None
+
+    friendly = base.replace("-", " ").replace("_", " ").strip() or dir_name
+    return friendly, tenant_id
+
+
+def _normalize_label(label: str) -> str:
+    return label.replace("-", " ").replace("_", " ").strip().lower()
+
+
+def list_local_exports(base: Path, suffix: str) -> List[Dict[str, Any]]:
+    """
+    Собирает список экспортированных файлов указанного типа (rules/actions).
+    Возвращает структуры вида:
+    {"tenant_name": "...", "tenant_dir": "...", "tenant_id": "...", "files": [...]}
+    """
+
+    results: List[Dict[str, Any]] = []
+    for subdir in sorted(base.iterdir()):
+        if not subdir.is_dir():
+            continue
+
+        tenant_name, tenant_id = _tenant_label_from_dir(subdir.name)
+        files = sorted(p.name for p in subdir.glob(f"*.{suffix}.json") if p.is_file())
+        if not files:
+            continue
+
+        results.append(
+            {
+                "tenant_name": tenant_name,
+                "tenant_dir": subdir.name,
+                "tenant_id": tenant_id,
+                "files": files,
+            }
+        )
+
+    return results
+
+
+def load_local_payload(
+    base: Path, tenant_name: str, filename: str, suffix: str
+) -> Dict[str, Any]:
+    """
+    Читает JSON-файл из локального каталога экспорта по названию тенанта.
+    Поддерживает только файлы с расширением .<suffix>.json.
+    """
+
+    if not filename.endswith(f".{suffix}.json"):
+        raise ValueError(
+            f"Filename must end with .{suffix}.json (got {filename!r})"
+        )
+
+    normalized_target = _normalize_label(tenant_name)
+
+    for subdir in base.iterdir():
+        if not subdir.is_dir():
+            continue
+
+        friendly, _ = _tenant_label_from_dir(subdir.name)
+        if _normalize_label(friendly) != normalized_target and _normalize_label(
+            subdir.name
+        ) != normalized_target:
+            continue
+
+        candidate = subdir / filename
+        if candidate.is_file():
+            return load_json_file(candidate)
+
+    raise FileNotFoundError(
+        f"File {filename} for tenant {tenant_name!r} not found in {base}"
+    )
