@@ -208,17 +208,7 @@ __marimo__/
 
 
 
-__pycache__/
-*.pyc
-*.pyo
-*.pyd
-.env
 .env.*
-venv/
-.cache/
-.idea/
-.vscode/
-
 snapshots/
 logs/
 
