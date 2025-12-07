@@ -79,9 +79,25 @@ def _tenant_id_from_snapshot_path(path: Path) -> Optional[str]:
     return parts[-1]
 
 
+def _timestamp_from_snapshot_path(path: Path) -> Optional[datetime]:
+    """
+    Parse timestamp prefix from snapshot filename.
+
+    Expected prefix format: ``YYYYMMDDTHHMMSSZ`` before the first underscore.
+    """
+
+    prefix = path.name.split("_", 1)[0]
+    try:
+        return datetime.strptime(prefix, "%Y%m%dT%H%M%SZ")
+    except ValueError:
+        return None
+
+
 def latest_snapshot_per_tenant() -> Dict[str, str]:
     """
-    Returns mapping tenant_id -> latest snapshot mtime (ISO string, UTC).
+    Returns mapping tenant_id -> latest snapshot timestamp (ISO string, UTC).
+
+    If timestamp cannot be parsed from filename, falls back to file mtime.
     """
 
     latest: Dict[str, datetime] = {}
@@ -91,14 +107,16 @@ def latest_snapshot_per_tenant() -> Dict[str, str]:
         if not tenant_id:
             continue
 
-        try:
-            mtime = datetime.utcfromtimestamp(path.stat().st_mtime)
-        except OSError:
-            continue
+        ts = _timestamp_from_snapshot_path(path)
+        if not ts:
+            try:
+                ts = datetime.utcfromtimestamp(path.stat().st_mtime)
+            except OSError:
+                continue
 
         current = latest.get(tenant_id)
-        if not current or mtime > current:
-            latest[tenant_id] = mtime
+        if not current or ts > current:
+            latest[tenant_id] = ts
 
     return {
         tid: dt.replace(microsecond=0).isoformat() + "Z" for tid, dt in latest.items()

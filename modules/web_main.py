@@ -604,10 +604,17 @@ INDEX_HTML = """
     Эти номера совпадают с кодами действий в CLI-последовательности.
   </p>
 
-  <h2 id="section-tenant-en">1. Tenants</h2>
-  <h2 id="section-tenant-ru" class="hidden">1. Тенанты</h2>
+  <h2 id="section-tenant-en">1. Tenants & snapshots</h2>
+  <h2 id="section-tenant-ru" class="hidden">1. Тенанты и снепшоты</h2>
 
   <div class="settings-panel">
+    <div class="settings-actions">
+      <code>1</code> –
+      <span id="a1-en">Export snapshots for all tenants</span>
+      <span id="a1-ru" class="hidden">Экспорт снапшотов всех тенантов</span>
+      <button onclick="runSnapshots()">Run</button>
+    </div>
+
     <div class="settings-actions">
       <button onclick="loadTenants()">Reload tenants</button>
     </div>
@@ -631,16 +638,6 @@ INDEX_HTML = """
       <small id="tenant-import-hint-en">Choose specific tenant or "All tenants".</small>
       <small id="tenant-import-hint-ru" class="hidden">Выбери конкретный тенант или «Все тенанты».</small>
     </div>
-  </div>
-
-  <h2 id="section-snapshots-en">2. Snapshots</h2>
-  <h2 id="section-snapshots-ru" class="hidden">2. Снапшоты</h2>
-
-  <div class="settings-actions">
-    <code>1</code> –
-    <span id="a1-en">Export snapshots for all tenants</span>
-    <span id="a1-ru" class="hidden">Экспорт снапшотов всех тенантов</span>
-    <button onclick="runSnapshots()">Run</button>
   </div>
 
   <p>
@@ -761,7 +758,6 @@ INDEX_HTML = """
         ["title-en", "title-ru"],
         ["desc-en", "desc-ru"],
         ["section-tenant-en", "section-tenant-ru"],
-        ["section-snapshots-en", "section-snapshots-ru"],
         ["section-actions-en", "section-actions-ru"],
         ["section-rules-en", "section-rules-ru"],
         ["import-text-en", "import-text-ru"],
