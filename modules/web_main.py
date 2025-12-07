@@ -19,7 +19,11 @@ from .rules_actions import (
     load_local_payload,
 )
 
-from .snapshots import export_all_tenant_snapshots, export_snapshot_for_tenant
+from .snapshots import (
+    cleanup_old_snapshots,
+    export_all_tenant_snapshots,
+    export_snapshot_for_tenant,
+)
 from .tenants import fetch_tenants
 
 app = FastAPI(
@@ -38,6 +42,9 @@ token_manager = TokenManager()
 @app.on_event("startup")
 async def _startup() -> None:
     logger.add(str(config.LOG_FILE), level=config.LOG_LEVEL)
+    removed = cleanup_old_snapshots()
+    if removed:
+        logger.info(f"Startup cleanup: {removed} old snapshots removed")
     logger.info("Application startup complete")
 
 
@@ -76,6 +83,7 @@ def _settings_payload() -> Dict[str, Any]:
         "af_url": config.AF_URL,
         "api_login": config.API_LOGIN,
         "api_password": config.API_PASSWORD,
+        "snapshot_retention_days": config.SNAPSHOT_RETENTION_DAYS,
     }
 
 
@@ -97,6 +105,7 @@ async def api_save_settings(request: Request):
         "af_url": "AF_URL",
         "api_login": "API_LOGIN",
         "api_password": "API_PASSWORD",
+        "snapshot_retention_days": "SNAPSHOT_RETENTION_DAYS",
     }
 
     for key, target in mapping.items():
@@ -520,6 +529,20 @@ INDEX_HTML = """
       <input type="password" id="setting-api-password" placeholder="••••••" />
     </div>
 
+    <div class="settings-row">
+      <label>
+        <span id="label-snapshot-retention-en">Snapshot retention (days)</span>
+        <span id="label-snapshot-retention-ru" class="hidden">Хранить снапшоты (дней)</span>
+      </label>
+      <input
+        type="number"
+        id="setting-snapshot-retention"
+        min="1"
+        inputmode="numeric"
+        placeholder="30"
+      />
+    </div>
+
     <div class="settings-actions">
       <button onclick="saveSettings()" id="settings-save-en">Save settings</button>
       <button onclick="saveSettings()" id="settings-save-ru" class="hidden">Сохранить</button>
@@ -664,6 +687,7 @@ INDEX_HTML = """
         ["label-af-url-en", "label-af-url-ru"],
         ["label-api-login-en", "label-api-login-ru"],
         ["label-api-password-en", "label-api-password-ru"],
+        ["label-snapshot-retention-en", "label-snapshot-retention-ru"],
         ["settings-save-en", "settings-save-ru"],
         ["settings-close-en", "settings-close-ru"],
         ["local-import-title-en", "local-import-title-ru"],
@@ -733,6 +757,8 @@ INDEX_HTML = """
         document.getElementById("setting-af-url").value = data.af_url || "";
         document.getElementById("setting-api-login").value = data.api_login || "";
         document.getElementById("setting-api-password").value = data.api_password || "";
+        document.getElementById("setting-snapshot-retention").value =
+          data.snapshot_retention_days ?? 30;
 
         setLang(currentLang);
         setTheme(currentTheme);
@@ -750,6 +776,13 @@ INDEX_HTML = """
         af_url: document.getElementById("setting-af-url").value,
         api_login: document.getElementById("setting-api-login").value,
         api_password: document.getElementById("setting-api-password").value,
+        snapshot_retention_days: (() => {
+          const val = document
+            .getElementById("setting-snapshot-retention")
+            .value.trim();
+          const num = Number(val);
+          return Number.isFinite(num) && num > 0 ? num : null;
+        })(),
       };
 
       log("Saving settings...");

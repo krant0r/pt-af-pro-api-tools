@@ -31,7 +31,7 @@ def _snapshot_filename(tenant: Dict[str, Any]) -> Path:
     return config.SNAPSHOTS_DIR / fname
 
 
-def _cleanup_old_snapshots() -> int:
+def cleanup_old_snapshots() -> int:
     """
     Удаляет снапшоты старше SNAPSHOT_RETENTION_DAYS, если параметр задан.
 
@@ -117,7 +117,7 @@ async def export_all_tenant_snapshots(tm: TokenManager) -> List[Path]:
     """
     created_files: List[Path] = []
 
-    removed = _cleanup_old_snapshots()
+    removed = cleanup_old_snapshots()
     if removed:
         logger.info(f"Cleanup complete: {removed} old snapshots removed")
 
