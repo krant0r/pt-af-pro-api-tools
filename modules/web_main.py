@@ -607,9 +607,34 @@ INDEX_HTML = """
   <h2 id="section-tenant-en">1. Tenants</h2>
   <h2 id="section-tenant-ru" class="hidden">1. Тенанты</h2>
 
-  <button onclick="loadTenants()">Reload tenants</button>
-  <br/>
-  <select id="tenant-select"></select>
+  <div class="settings-panel">
+    <div class="settings-actions">
+      <button onclick="loadTenants()">Reload tenants</button>
+    </div>
+
+    <div class="settings-row">
+      <label>
+        <span id="tenant-export-label-en">Tenant for export actions:</span>
+        <span id="tenant-export-label-ru" class="hidden">
+          Тенант для экспортных операций:
+        </span>
+      </label>
+      <select id="tenant-select"></select>
+    </div>
+
+    <div class="settings-row">
+      <label>
+        <span id="tenant-import-label-en">Tenant(s) for import:</span>
+        <span id="tenant-import-label-ru" class="hidden">Тенант(ы) для импорта:</span>
+      </label>
+      <select id="import-tenant-select"></select>
+      <small id="tenant-import-hint-en">Choose specific tenant or "All tenants".</small>
+      <small id="tenant-import-hint-ru" class="hidden">Выбери конкретный тенант или «Все тенанты».</small>
+    </div>
+  </div>
+
+  <h2 id="section-snapshots-en">2. Snapshots</h2>
+  <h2 id="section-snapshots-ru" class="hidden">2. Снапшоты</h2>
 
   <div class="settings-actions">
     <code>1</code> –
@@ -618,62 +643,41 @@ INDEX_HTML = """
     <button onclick="runSnapshots()">Run</button>
   </div>
 
-  <h2 id="section-actions-en">2. Actions</h2>
-  <h2 id="section-actions-ru" class="hidden">2. Действия</h2>
+  <p>
+    <span id="import-text-en">
+      Choose target tenant(s) above, then use import/export buttons below.
+    </span>
+    <span id="import-text-ru" class="hidden">
+      Выбери тенант(ы) для импорта выше, затем используй кнопки ниже.
+    </span>
+  </p>
 
-  <ul>
-    <li>
-      <code>2</code> –
-      <span id="a2-en">Export rules for selected tenant</span>
-      <span id="a2-ru" class="hidden">Экспорт правил для выбранного тенанта</span>
-      <button onclick="runRulesExport()">Run</button>
-    </li>
-    <li>
+  <h2 id="section-actions-en">3. Actions</h2>
+  <h2 id="section-actions-ru" class="hidden">3. Действия</h2>
+
+  <div class="settings-panel">
+    <div class="settings-actions">
       <code>3</code> –
       <span id="a3-en">Export actions for selected tenant</span>
       <span id="a3-ru" class="hidden">Экспорт действий для выбранного тенанта</span>
       <button onclick="runActionsExport()">Run</button>
-    </li>
-  </ul>
+    </div>
 
-  <h2 id="section-import-en">3. Import rule / action JSON</h2>
-  <h2 id="section-import-ru" class="hidden">3. Импорт JSON правил / действий</h2>
-
-  <p>
-    <span id="import-text-en">
-      Select tenant, choose file and click import button.
-    </span>
-    <span id="import-text-ru" class="hidden">
-      Выбери тенант, выбери файл и нажми нужную кнопку.
-    </span>
-  </p>
-
-  <input type="file" id="file-input" />
-
-  <div>
-    <button onclick="importRule()">Import rule JSON</button>
-    <button onclick="importAction()">Import action JSON</button>
-  </div>
-
-  <h3 id="local-import-title-en">Or use exported files from /data</h3>
-  <h3 id="local-import-title-ru" class="hidden">
-    Или выбери уже выгруженные файлы из /data
-  </h3>
-
-  <div class="settings-panel">
     <div class="settings-row">
       <label>
-        <span id="local-rules-label-en">Rules from tenant (by name):</span>
-        <span id="local-rules-label-ru" class="hidden">
-          Правила из тенанта (по названию):
-        </span>
+        <span id="import-actions-title-en">Import action JSON</span>
+        <span id="import-actions-title-ru" class="hidden">Импорт JSON действия</span>
       </label>
-      <div class="settings-actions">
-        <select id="local-rules-tenant" onchange="updateLocalFiles('rule')"></select>
-        <select id="local-rules-file"></select>
-        <button onclick="importRuleFromLocal()">Import selected rule</button>
+      <input type="file" id="action-file-input" />
+      <div>
+        <button onclick="importAction()">Import action JSON</button>
       </div>
     </div>
+
+    <h3 id="local-import-title-en">Or use exported files from /data</h3>
+    <h3 id="local-import-title-ru" class="hidden">
+      Или выбери уже выгруженные файлы из /data
+    </h3>
 
     <div class="settings-row">
       <label>
@@ -688,7 +692,49 @@ INDEX_HTML = """
         <button onclick="importActionFromLocal()">Import selected action</button>
       </div>
     </div>
+  </div>
 
+  <h2 id="section-rules-en">4. Rules</h2>
+  <h2 id="section-rules-ru" class="hidden">4. Правила</h2>
+
+  <div class="settings-panel">
+    <div class="settings-actions">
+      <code>2</code> –
+      <span id="a2-en">Export rules for selected tenant</span>
+      <span id="a2-ru" class="hidden">Экспорт правил для выбранного тенанта</span>
+      <button onclick="runRulesExport()">Run</button>
+    </div>
+
+    <div class="settings-row">
+      <label>
+        <span id="import-rules-title-en">Import rule JSON</span>
+        <span id="import-rules-title-ru" class="hidden">Импорт JSON правила</span>
+      </label>
+      <input type="file" id="rule-file-input" />
+      <div>
+        <button onclick="importRule()">Import rule JSON</button>
+      </div>
+    </div>
+
+    <h3 id="local-rules-heading-en">Rules from local exports</h3>
+    <h3 id="local-rules-heading-ru" class="hidden">Правила из локальных выгрузок</h3>
+
+    <div class="settings-row">
+      <label>
+        <span id="local-rules-label-en">Rules from tenant (by name):</span>
+        <span id="local-rules-label-ru" class="hidden">
+          Правила из тенанта (по названию):
+        </span>
+      </label>
+      <div class="settings-actions">
+        <select id="local-rules-tenant" onchange="updateLocalFiles('rule')"></select>
+        <select id="local-rules-file"></select>
+        <button onclick="importRuleFromLocal()">Import selected rule</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="settings-actions">
     <button onclick="loadLocalExports()">Reload exported files list</button>
   </div>
 
@@ -701,6 +747,7 @@ INDEX_HTML = """
     let currentTheme = "light";
     let localRuleExports = [];
     let localActionExports = [];
+    let tenantsCache = [];
 
     function themeToggleText(theme, lang) {
       const lightText = lang === "ru" ? "Светлая тема" : "Light theme";
@@ -714,8 +761,9 @@ INDEX_HTML = """
         ["title-en", "title-ru"],
         ["desc-en", "desc-ru"],
         ["section-tenant-en", "section-tenant-ru"],
+        ["section-snapshots-en", "section-snapshots-ru"],
         ["section-actions-en", "section-actions-ru"],
-        ["section-import-en", "section-import-ru"],
+        ["section-rules-en", "section-rules-ru"],
         ["import-text-en", "import-text-ru"],
         ["log-title-en", "log-title-ru"],
         ["a1-en", "a1-ru"],
@@ -737,6 +785,12 @@ INDEX_HTML = """
         ["local-import-title-en", "local-import-title-ru"],
         ["local-rules-label-en", "local-rules-label-ru"],
         ["local-actions-label-en", "local-actions-label-ru"],
+        ["tenant-export-label-en", "tenant-export-label-ru"],
+        ["tenant-import-label-en", "tenant-import-label-ru"],
+        ["tenant-import-hint-en", "tenant-import-hint-ru"],
+        ["import-actions-title-en", "import-actions-title-ru"],
+        ["import-rules-title-en", "import-rules-title-ru"],
+        ["local-rules-heading-en", "local-rules-heading-ru"],
       ];
       ids.forEach(([en, ru]) => {
         document.getElementById(en).classList.toggle("hidden", lang !== "en");
@@ -750,6 +804,9 @@ INDEX_HTML = """
       if (languageSelect) {
         languageSelect.value = lang;
       }
+
+      populateTenantSelect("tenant-select");
+      populateTenantSelect("import-tenant-select", true);
 
       setTheme(currentTheme);
     }
@@ -832,6 +889,45 @@ INDEX_HTML = """
       }
     }
 
+    function tenantOptionLabel(t) {
+      const name = t.name || t.displayName || t.id;
+      const snapshotInfo = formatSnapshotInfo(t.last_snapshot_at);
+      return `${name} — ${snapshotInfo}`;
+    }
+
+    function populateTenantSelect(selectId, includeAll = false) {
+      const select = document.getElementById(selectId);
+      if (!select) {
+        return;
+      }
+
+      const previous = select.value;
+      select.innerHTML = "";
+
+      if (includeAll) {
+        const optAll = document.createElement("option");
+        optAll.value = "__all__";
+        optAll.textContent =
+          currentLang === "ru" ? "Все тенанты" : "All tenants";
+        select.appendChild(optAll);
+      }
+
+      tenantsCache.forEach((t) => {
+        const opt = document.createElement("option");
+        opt.value = t.id;
+        opt.textContent = tenantOptionLabel(t);
+        select.appendChild(opt);
+      });
+
+      if (previous) {
+        select.value = previous;
+      }
+
+      if (!select.value && select.options.length) {
+        select.selectedIndex = 0;
+      }
+    }
+
     async function saveSettings() {
       const payload = {
         theme: document.getElementById("setting-theme").value,
@@ -879,22 +975,28 @@ INDEX_HTML = """
         return;
       }
       const data = await resp.json();
-      const select = document.getElementById("tenant-select");
-      select.innerHTML = "";
-      data.forEach((t) => {
-        const opt = document.createElement("option");
-        opt.value = t.id;
-        const name = t.name || t.displayName || t.id;
-        const snapshotInfo = formatSnapshotInfo(t.last_snapshot_at);
-        opt.textContent = `${name} — ${snapshotInfo}`;
-        select.appendChild(opt);
-      });
+      tenantsCache = data;
+      populateTenantSelect("tenant-select");
+      populateTenantSelect("import-tenant-select", true);
       log("Loaded " + data.length + " tenants");
     }
 
     function getSelectedTenantId() {
       const select = document.getElementById("tenant-select");
-      return select.value;
+      return select ? select.value : "";
+    }
+
+    function getImportTargetTenantIds() {
+      const select = document.getElementById("import-tenant-select");
+      if (!select) {
+        return [];
+      }
+
+      if (select.value === "__all__") {
+        return tenantsCache.map((t) => String(t.id)).filter(Boolean);
+      }
+
+      return select.value ? [select.value] : [];
     }
 
     async function runSnapshots() {
@@ -943,11 +1045,11 @@ INDEX_HTML = """
     }
 
     async function importRule() {
-      await importJsonTo("/rules/import");
+      await importJsonTo("/rules/import", "rule-file-input");
     }
 
     async function importAction() {
-      await importJsonTo("/actions/import");
+      await importJsonTo("/actions/import", "action-file-input");
     }
 
     function localData(kind) {
@@ -989,10 +1091,17 @@ INDEX_HTML = """
         return;
       }
 
-      selected.files.forEach((fname) => {
+      selected.files.forEach((item) => {
+        const filename = typeof item === "string" ? item : item.filename;
+        const label =
+          typeof item === "string" ? item : item.display_name || item.filename;
+        const textLabel =
+          filename && label && filename !== label
+            ? `${label} (${filename})`
+            : label || filename;
         const opt = document.createElement("option");
-        opt.value = fname;
-        opt.textContent = fname;
+        opt.value = filename;
+        opt.textContent = textLabel || filename || "";
         filesSelect.appendChild(opt);
       });
     }
@@ -1023,9 +1132,9 @@ INDEX_HTML = """
     }
 
     async function importFromLocal(kind) {
-      const tenantId = getSelectedTenantId();
-      if (!tenantId) {
-        log("No tenant selected");
+      const tenantIds = getImportTargetTenantIds();
+      if (!tenantIds.length) {
+        log("No target tenant selected");
         return;
       }
 
@@ -1041,45 +1150,52 @@ INDEX_HTML = """
 
       const path =
         kind === "rule" ? "/rules/import/local" : "/actions/import/local";
-      log(
-        `Importing ${kind} from local export ${filename} (tenant ${sourceTenant})`
-      );
-      const resp = await fetch(
-        `/api/tenants/${encodeURIComponent(tenantId)}${path}`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            source_tenant: sourceTenant,
-            filename: filename,
-          }),
-        }
-      );
-      const data = await resp.json();
-      log("Import result: " + JSON.stringify(data));
+      for (const tenantId of tenantIds) {
+        log(
+          `Importing ${kind} from local export ${filename} (source ${sourceTenant}) to tenant ${tenantId}`
+        );
+        const resp = await fetch(
+          `/api/tenants/${encodeURIComponent(tenantId)}${path}`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              source_tenant: sourceTenant,
+              filename: filename,
+            }),
+          }
+        );
+        const data = await resp.json();
+        log(`Import result for ${tenantId}: ` + JSON.stringify(data));
+      }
     }
 
-    async function importJsonTo(path) {
-      const tenantId = getSelectedTenantId();
-      if (!tenantId) {
-        log("No tenant selected");
+    async function importJsonTo(path, fileInputId) {
+      const tenantIds = getImportTargetTenantIds();
+      if (!tenantIds.length) {
+        log("No target tenant selected");
         return;
       }
-      const fileInput = document.getElementById("file-input");
-      if (!fileInput.files.length) {
+      const fileInput = document.getElementById(fileInputId);
+      if (!fileInput || !fileInput.files.length) {
         log("No file selected");
         return;
       }
       const file = fileInput.files[0];
       const form = new FormData();
       form.append("file", file);
-      log("Uploading " + file.name + " to " + path + " for tenant " + tenantId);
-      const resp = await fetch(
-        "/api/tenants/" + encodeURIComponent(tenantId) + path,
-        { method: "POST", body: form }
-      );
-      const data = await resp.json();
-      log("Import result: " + JSON.stringify(data));
+
+      for (const tenantId of tenantIds) {
+        log(
+          `Uploading ${file.name} to ${path} for tenant ${tenantId}`
+        );
+        const resp = await fetch(
+          "/api/tenants/" + encodeURIComponent(tenantId) + path,
+          { method: "POST", body: form }
+        );
+        const data = await resp.json();
+        log(`Import result for ${tenantId}: ` + JSON.stringify(data));
+      }
     }
 
     async function initUi() {
