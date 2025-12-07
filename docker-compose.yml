@@ -34,6 +34,8 @@ services:
       # - ptaf_api_token
 
     volumes:
+      - ./modules:/app/modules
+      - ./init_snapshots.py:/app/init_snapshots.py
       - ./snapshots:/app/snapshots
 
   init-snapshots:
@@ -55,6 +57,8 @@ services:
       - ptaf_api_password
       # - ptaf_api_token
     volumes:
+      - ./modules:/app/modules
+      - ./init_snapshots.py:/app/init_snapshots.py
       - ./snapshots:/app/snapshots
 
 secrets:
