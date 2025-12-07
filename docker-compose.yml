@@ -13,26 +13,7 @@ services:
       # - ptaf_api_token
     volumes:
       - ./modules:/home/app/modules
-      - ./init_snapshots.py:/home/app/init_snapshots.py
       # вся динамика (logs, snapshots, rules, actions) теперь в ./data
-      - ./data:/home/app/data
-
-  init-snapshots:
-    image: pt-af-pro-api-tools
-    restart: "no"
-    env_file: .env
-    user: "${UID}:${GID}"
-    depends_on:
-      - app
-    command: ["python", "init_snapshots.py"]
-
-    secrets:
-      - ptaf_api_login
-      - ptaf_api_password
-      # - ptaf_api_token
-    volumes:
-      - ./modules:/home/app/modules
-      - ./init_snapshots.py:/home/app/init_snapshots.py
       - ./data:/home/app/data
 
 secrets:
