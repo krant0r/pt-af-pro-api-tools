@@ -1000,6 +1000,9 @@ INDEX_HTML = """
       const resp = await fetch("/api/init/snapshots", { method: "POST" });
       const data = await resp.json();
       log("Snapshots result: " + JSON.stringify(data));
+      if (resp.ok) {
+        await loadTenants();
+      }
     }
 
     async function runRulesExport() {
@@ -1019,6 +1022,9 @@ INDEX_HTML = """
       );
       const data = await resp.json();
       log("Rules export result: " + JSON.stringify(data));
+      if (resp.ok) {
+        await loadLocalExports();
+      }
     }
 
     async function runActionsExport() {
@@ -1038,6 +1044,9 @@ INDEX_HTML = """
       );
       const data = await resp.json();
       log("Actions export result: " + JSON.stringify(data));
+      if (resp.ok) {
+        await loadLocalExports();
+      }
     }
 
     async function importRule() {
