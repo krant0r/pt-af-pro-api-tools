@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 import json
-from typing import Any, Dict, List, Optional
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Set
 
 import httpx
 from fastapi import FastAPI, File, UploadFile, Request
@@ -87,6 +88,69 @@ async def _find_tenant(
     return None
 
 
+def _tenant_name_from_snapshot(data: Dict[str, Any], path: Path) -> str:
+    for key in (
+        "tenant_name",
+        "tenantName",
+        "tenant",
+        "tenant_id",
+        "tenantId",
+        "name",
+    ):
+        val = data.get(key)
+        if isinstance(val, str) and val.strip():
+            return val.strip()
+    return path.stem
+
+
+def _collect_snapshot_summary() -> Dict[str, Any]:
+    applications: Set[str] = set()
+    hosts: Set[str] = set()
+    tenant_hosts: List[Dict[str, Any]] = []
+
+    snapshot_files = sorted(config.SNAPSHOTS_DIR.glob("*.json"))
+    for path in snapshot_files:
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except Exception as exc:  # noqa: BLE001
+            logger.warning(f"Failed to read snapshot {path}: {exc}")
+            continue
+
+        if not isinstance(data, dict):
+            logger.warning(f"Snapshot {path} has unexpected type: {type(data)}")
+            continue
+
+        tenant_name = _tenant_name_from_snapshot(data, path)
+        tenant_hosts_set: Set[str] = set()
+
+        apps = data.get("applications")
+        if isinstance(apps, list):
+            for app in apps:
+                if not isinstance(app, dict):
+                    continue
+                name = app.get("name")
+                if isinstance(name, str) and name.strip():
+                    applications.add(name.strip())
+                app_hosts = app.get("hosts")
+                if isinstance(app_hosts, list):
+                    for host in app_hosts:
+                        if isinstance(host, str) and host.strip():
+                            cleaned = host.strip()
+                            hosts.add(cleaned)
+                            tenant_hosts_set.add(cleaned)
+
+        tenant_hosts.append(
+            {"tenant_name": tenant_name, "hosts": sorted(tenant_hosts_set)}
+        )
+
+    return {
+        "snapshot_files": len(snapshot_files),
+        "applications": sorted(applications),
+        "hosts": sorted(hosts),
+        "tenant_hosts": tenant_hosts,
+    }
+
+
 def _settings_payload() -> Dict[str, Any]:
     return {
         "theme": config.UI_THEME,
@@ -150,6 +214,12 @@ async def init_snapshots():
             "files": [str(p) for p in paths],
         }
     )
+
+
+@app.get("/api/snapshots/summary")
+async def api_snapshot_summary():
+    summary = _collect_snapshot_summary()
+    return summary
 
 
 @app.get("/api/tenants")
@@ -617,6 +687,20 @@ INDEX_HTML = """
 
     <div class="settings-actions">
       <button onclick="loadTenants()">Reload tenants</button>
+      <button onclick="logSnapshotApplications()">
+        <span id="snapshot-apps-en">Apps from snapshots (.json) → log</span>
+        <span id="snapshot-apps-ru" class="hidden">Приложения из .json → лог</span>
+      </button>
+      <button onclick="logSnapshotHosts()">
+        <span id="snapshot-hosts-en">Hosts from snapshots (.json) → log</span>
+        <span id="snapshot-hosts-ru" class="hidden">Хосты из .json → лог</span>
+      </button>
+      <button onclick="logSnapshotTenantHosts()">
+        <span id="snapshot-tenant-hosts-en">Tenant + hosts (.json) → log</span>
+        <span id="snapshot-tenant-hosts-ru" class="hidden">
+          Тенант + хосты (.json) → лог
+        </span>
+      </button>
     </div>
 
     <div class="settings-row">
@@ -745,6 +829,7 @@ INDEX_HTML = """
     let localRuleExports = [];
     let localActionExports = [];
     let tenantsCache = [];
+    let snapshotSummaryCache = null;
 
     function themeToggleText(theme, lang) {
       const lightText = lang === "ru" ? "Светлая тема" : "Light theme";
@@ -787,6 +872,9 @@ INDEX_HTML = """
         ["import-actions-title-en", "import-actions-title-ru"],
         ["import-rules-title-en", "import-rules-title-ru"],
         ["local-rules-heading-en", "local-rules-heading-ru"],
+        ["snapshot-apps-en", "snapshot-apps-ru"],
+        ["snapshot-hosts-en", "snapshot-hosts-ru"],
+        ["snapshot-tenant-hosts-en", "snapshot-tenant-hosts-ru"],
       ];
       ids.forEach(([en, ru]) => {
         document.getElementById(en).classList.toggle("hidden", lang !== "en");
@@ -1001,6 +1089,7 @@ INDEX_HTML = """
       const data = await resp.json();
       log("Snapshots result: " + JSON.stringify(data));
       if (resp.ok) {
+        snapshotSummaryCache = null;
         await loadTenants();
       }
     }
@@ -1025,6 +1114,95 @@ INDEX_HTML = """
       if (resp.ok) {
         await loadLocalExports();
       }
+    }
+
+    async function fetchSnapshotSummary(force = false) {
+      if (!force && snapshotSummaryCache) {
+        return snapshotSummaryCache;
+      }
+
+      log("Reading snapshot .json files...");
+      const resp = await fetch("/api/snapshots/summary");
+      if (!resp.ok) {
+        log("Failed to read snapshot files: " + resp.statusText);
+        return null;
+      }
+
+      const data = await resp.json();
+      snapshotSummaryCache = data;
+      if (!data.snapshot_files) {
+        log("No snapshot .json files found");
+      } else {
+        log("Snapshot summary loaded from " + data.snapshot_files + " file(s)");
+      }
+      return data;
+    }
+
+    function logItemsWithPrefix(items, prefix, emptyMessage) {
+      if (!items || !items.length) {
+        log(emptyMessage);
+        return;
+      }
+
+      items.forEach((item) => {
+        const text = typeof item === "string" ? item : JSON.stringify(item);
+        log(prefix + text);
+      });
+    }
+
+    async function logSnapshotApplications() {
+      const summary = await fetchSnapshotSummary();
+      if (!summary) {
+        return;
+      }
+
+      logItemsWithPrefix(
+        summary.applications || [],
+        "[apps] ",
+        currentLang === "ru"
+          ? "Нет приложений в снапшотах"
+          : "No applications found in snapshots"
+      );
+    }
+
+    async function logSnapshotHosts() {
+      const summary = await fetchSnapshotSummary();
+      if (!summary) {
+        return;
+      }
+
+      logItemsWithPrefix(
+        summary.hosts || [],
+        "[host] ",
+        currentLang === "ru"
+          ? "Нет хостов в снапшотах"
+          : "No hosts found in snapshots"
+      );
+    }
+
+    async function logSnapshotTenantHosts() {
+      const summary = await fetchSnapshotSummary();
+      if (!summary) {
+        return;
+      }
+
+      const entries = Array.isArray(summary.tenant_hosts)
+        ? summary.tenant_hosts
+        : [];
+      if (!entries.length) {
+        log(
+          currentLang === "ru"
+            ? "Нет данных по тенантам в снапшотах"
+            : "No tenant data found in snapshots"
+        );
+        return;
+      }
+
+      entries.forEach((entry) => {
+        const hosts = Array.isArray(entry.hosts) ? entry.hosts.join(",") : "";
+        const name = entry.tenant_name || entry.tenantName || "unknown";
+        log(`[tenant] ${name}: ${hosts}`);
+      });
     }
 
     async function runActionsExport() {
