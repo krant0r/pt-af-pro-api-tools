@@ -207,11 +207,36 @@ def _normalize_label(label: str) -> str:
     return label.replace("-", " ").replace("_", " ").strip().lower()
 
 
+def _read_display_name(path: Path) -> str:
+    """
+    Try to extract human-friendly name from exported JSON payload.
+
+    Falls back to the filename (without suffix) if JSON is invalid or
+    doesn't contain a "name" field.
+    """
+
+    try:
+        data = load_json_file(path)
+        name = data.get("name")
+        if name:
+            return str(name)
+    except Exception:
+        logger.debug(f"Failed to read name from {path}")
+
+    stem = path.name
+    extended_suffix = f".{suffix}.json"
+    if stem.endswith(extended_suffix):
+        stem = stem[: -len(extended_suffix)]
+    elif stem.endswith(path.suffix):
+        stem = path.stem
+    return stem
+
+
 def list_local_exports(base: Path, suffix: str) -> List[Dict[str, Any]]:
     """
     Собирает список экспортированных файлов указанного типа (rules/actions).
     Возвращает структуры вида:
-    {"tenant_name": "...", "tenant_dir": "...", "tenant_id": "...", "files": [...]}
+    {"tenant_name": "...", "tenant_dir": "...", "tenant_id": "...", "files": [{filename, display_name}]}
     """
 
     results: List[Dict[str, Any]] = []
@@ -220,8 +245,19 @@ def list_local_exports(base: Path, suffix: str) -> List[Dict[str, Any]]:
             continue
 
         tenant_name, tenant_id = _tenant_label_from_dir(subdir.name)
-        files = sorted(p.name for p in subdir.glob(f"*.{suffix}.json") if p.is_file())
-        if not files:
+        files_meta: List[Dict[str, str]] = []
+
+        for path in sorted(subdir.glob(f"*.{suffix}.json")):
+            if not path.is_file():
+                continue
+            files_meta.append(
+                {
+                    "filename": path.name,
+                    "display_name": _read_display_name(path),
+                }
+            )
+
+        if not files_meta:
             continue
 
         results.append(
@@ -229,7 +265,7 @@ def list_local_exports(base: Path, suffix: str) -> List[Dict[str, Any]]:
                 "tenant_name": tenant_name,
                 "tenant_dir": subdir.name,
                 "tenant_id": tenant_id,
-                "files": files,
+                "files": files_meta,
             }
         )
 
