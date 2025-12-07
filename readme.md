@@ -30,7 +30,6 @@ rules / actions / snapshots.
 - `modules/tenants.py` – helper for fetching list of tenants.
 - `modules/snapshots.py` – stage 1 logic: export snapshots for all tenants.
 - `modules/web_main.py` – FastAPI application (healthcheck and HTTP trigger for snapshots; встроенный UI).
-- `init_snapshots.py` – CLI entrypoint to run stage 1 from command line / Docker.
 
 ## Configuration
 
@@ -69,12 +68,6 @@ Secrets themselves (files under `./secrets/*.txt`) are ignored by git via `.giti
 python3 -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
-
-# Export env vars for dev (example)
-export AF_URL="https://afpro.local"
-export API_PATH="/api/ptaf/v4"
-export API_LOGIN="your-login"
-export API_PASSWORD="your-password"
 
 # Запуск веб-приложения с UI
 uvicorn modules.web_main:app --host 0.0.0.0 --port 8000
