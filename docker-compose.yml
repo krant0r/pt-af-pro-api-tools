@@ -11,11 +11,11 @@ services:
       - ptaf_api_login
       - ptaf_api_password
       # - ptaf_api_token
-
     volumes:
       - ./modules:/home/app/modules
       - ./init_snapshots.py:/home/app/init_snapshots.py
-      - ./snapshots:/home/app/snapshots
+      # вся динамика (logs, snapshots, rules, actions) теперь в ./data
+      - ./data:/home/app/data
 
   init-snapshots:
     image: pt-af-pro-api-tools
@@ -33,12 +33,12 @@ services:
     volumes:
       - ./modules:/home/app/modules
       - ./init_snapshots.py:/home/app/init_snapshots.py
-      - ./snapshots:/home/app/snapshots
+      - ./data:/home/app/data
 
 secrets:
   ptaf_api_login:
     file: ./secrets/ptaf_api_login.txt
   ptaf_api_password:
     file: ./secrets/ptaf_api_password.txt
-  ptaf_api_token:
-    file: ./secrets/ptaf_api_token.txt
+  # ptaf_api_token:
+  #   file: ./secrets/ptaf_api_token.txt

@@ -1,0 +1,188 @@
+from __future__ import annotations
+
+import json
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Tuple
+
+import httpx
+from loguru import logger
+
+from .auth import TenantAuth, TokenManager
+from .config import config
+from .tenants import fetch_tenants
+from .snapshots import _slugify
+
+
+def _tenant_subdir(base: Path, tenant: Dict[str, Any]) -> Path:
+    name = _slugify(str(tenant.get("name") or tenant.get("displayName") or tenant["id"]))
+    tenant_id = tenant.get("id", "unknown")
+    subdir = base / f"{name}_{tenant_id}"
+    subdir.mkdir(parents=True, exist_ok=True)
+    return subdir
+
+
+def _normalize_items(data: Any) -> List[Dict[str, Any]]:
+    """
+    PTAF может отдавать:
+      - список объектов
+      - {"items": [..]}
+    Делаем единый формат: List[dict].
+    """
+    if isinstance(data, dict) and "items" in data and isinstance(data["items"], list):
+        return data["items"]
+    if isinstance(data, list):
+        return data
+    raise RuntimeError(f"Unsupported list response type: {type(data)}")
+
+
+# ---------------------------------------------------------------------------
+# EXPORT
+# ---------------------------------------------------------------------------
+
+
+async def export_rules_for_tenant(
+    client: httpx.AsyncClient,
+    tm: TokenManager,
+    tenant: Dict[str, Any],
+) -> List[Path]:
+    tenant_id = str(tenant.get("id"))
+    subdir = _tenant_subdir(config.RULES_DIR, tenant)
+
+    url = f"{config.AF_URL}{config.RULES_ENDPOINT}"
+    logger.info(f"[tenant={tenant_id}] Exporting rules from {url}")
+
+    auth = TenantAuth(tm, tenant_id=tenant_id)
+    r = await client.get(url, auth=auth)
+    r.raise_for_status()
+
+    items = _normalize_items(r.json())
+    created: List[Path] = []
+
+    for rule in items:
+        rule_id = rule.get("id") or rule.get("name") or "rule"
+        fname = subdir / f"{_slugify(str(rule_id))}.rule.json"
+        fname.write_text(
+            json.dumps(rule, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+        created.append(fname)
+
+    logger.success(
+        f"[tenant={tenant_id}] Exported {len(created)} rule objects to {subdir}"
+    )
+    return created
+
+
+async def export_actions_for_tenant(
+    client: httpx.AsyncClient,
+    tm: TokenManager,
+    tenant: Dict[str, Any],
+) -> List[Path]:
+    tenant_id = str(tenant.get("id"))
+    subdir = _tenant_subdir(config.ACTIONS_DIR, tenant)
+
+    url = f"{config.AF_URL}{config.ACTIONS_ENDPOINT}"
+    logger.info(f"[tenant={tenant_id}] Exporting actions from {url}")
+
+    auth = TenantAuth(tm, tenant_id=tenant_id)
+    r = await client.get(url, auth=auth)
+    r.raise_for_status()
+
+    items = _normalize_items(r.json())
+    created: List[Path] = []
+
+    for action in items:
+        act_id = action.get("id") or action.get("name") or "action"
+        fname = subdir / f"{_slugify(str(act_id))}.action.json"
+        fname.write_text(
+            json.dumps(action, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+        created.append(fname)
+
+    logger.success(
+        f"[tenant={tenant_id}] Exported {len(created)} action objects to {subdir}"
+    )
+    return created
+
+
+async def export_rules_for_all_tenants(tm: TokenManager) -> List[Path]:
+    """
+    Массовый экспорт правил для всех тенантов в config.RULES_DIR.
+    """
+    created: List[Path] = []
+    async with httpx.AsyncClient(
+        verify=config.VERIFY_SSL,
+        timeout=config.REQUEST_TIMEOUT,
+    ) as client:
+        tenants = await fetch_tenants(client, tm)
+        if not tenants:
+            logger.warning("No tenants returned by API (rules export)")
+            return []
+
+        for tenant in tenants:
+            created.extend(await export_rules_for_tenant(client, tm, tenant))
+
+    return created
+
+
+async def export_actions_for_all_tenants(tm: TokenManager) -> List[Path]:
+    """
+    Массовый экспорт actions для всех тенантов в config.ACTIONS_DIR.
+    """
+    created: List[Path] = []
+    async with httpx.AsyncClient(
+        verify=config.VERIFY_SSL,
+        timeout=config.REQUEST_TIMEOUT,
+    ) as client:
+        tenants = await fetch_tenants(client, tm)
+        if not tenants:
+            logger.warning("No tenants returned by API (actions export)")
+            return []
+
+        for tenant in tenants:
+            created.extend(await export_actions_for_tenant(client, tm, tenant))
+
+    return created
+
+
+# ---------------------------------------------------------------------------
+# IMPORT
+# ---------------------------------------------------------------------------
+
+
+async def import_rule_payload(
+    client: httpx.AsyncClient,
+    tm: TokenManager,
+    tenant_id: str,
+    payload: Dict[str, Any],
+) -> Dict[str, Any]:
+    """
+    Импорт ОДНОГО правила (payload уже dict).
+    По умолчанию POST на RULES_ENDPOINT.
+    Если PTAF потребует другой метод/URL — поправишь в конфиге/коде.
+    """
+    url = f"{config.AF_URL}{config.RULES_ENDPOINT}"
+    auth = TenantAuth(tm, tenant_id=tenant_id)
+    r = await client.post(url, json=payload, auth=auth)
+    r.raise_for_status()
+    logger.info(f"[tenant={tenant_id}] Rule imported via POST {url}")
+    return r.json()
+
+
+async def import_action_payload(
+    client: httpx.AsyncClient,
+    tm: TokenManager,
+    tenant_id: str,
+    payload: Dict[str, Any],
+) -> Dict[str, Any]:
+    url = f"{config.AF_URL}{config.ACTIONS_ENDPOINT}"
+    auth = TenantAuth(tm, tenant_id=tenant_id)
+    r = await client.post(url, json=payload, auth=auth)
+    r.raise_for_status()
+    logger.info(f"[tenant={tenant_id}] Action imported via POST {url}")
+    return r.json()
+
+
+def load_json_file(path: Path) -> Dict[str, Any]:
+    return json.loads(path.read_text(encoding="utf-8"))

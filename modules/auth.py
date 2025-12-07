@@ -99,37 +99,89 @@ class TokenManager:
         client: httpx.AsyncClient,
         tenant_id: str,
     ) -> bool:
+        """
+        Получить / обновить access-токен для конкретного tenant'а.
+
+        Важно:
+        - используем текущий self.base_refresh;
+        - если успешно, ОБНОВЛЯЕМ self.base_refresh на новый refresh_token;
+        - если получаем 422 invalid_token, один раз переавторизуемся по паролю
+        (получаем новый base_refresh) и пробуем ещё раз.
+        """
+        # Убедимся, что базовый токен вообще есть
         if not self.base_refresh:
             logger.error("No refresh token, cannot obtain tenant token")
             return False
 
         url = f"{self.api_base}/auth/access_tokens"
-        payload = {
-            "refresh_token": self.base_refresh,
-            "tenant_id": tenant_id,
-            "fingerprint": self.fingerprint,
-        }
 
-        logger.debug(f"Requesting tenant token for {tenant_id} at {url}")
-        r = await client.post(url, json=payload)
-        if r.status_code != 201:
+        async def _do_request(refresh_token: str) -> httpx.Response:
+            payload = {
+                "refresh_token": refresh_token,
+                "tenant_id": tenant_id,
+                "fingerprint": self.fingerprint,
+            }
+            logger.debug(f"Requesting tenant token for {tenant_id} at {url}")
+            return await client.post(url, json=payload)
+
+        # Сначала пробуем с текущим self.base_refresh
+        tried_reauth = False
+
+        while True:
+            r = await _do_request(self.base_refresh)
+            if r.status_code == 201:
+                data = r.json()
+                access = data.get("access_token")
+                refresh = data.get("refresh_token")
+                exp = _jwt_exp(access or "")
+
+                # Обновляем информацию по tenant'у
+                self.tenants[tenant_id] = {
+                    "access": access,
+                    "refresh": refresh,
+                    "exp": exp,
+                }
+
+                # КРИТИЧНО: обновляем base_refresh, как в старом проекте
+                if refresh:
+                    self.base_refresh = refresh
+
+                logger.success(f"Tenant {tenant_id} token obtained")
+                return True
+
+            # Если refresh_token протух (422 invalid_token) — переавторизуемся по паролю и пробуем ещё раз
+            if (
+                r.status_code == 422
+                and not tried_reauth
+                and "invalid_token" in r.text
+                and config.auth_method == "password"
+            ):
+                tried_reauth = True
+                logger.warning(
+                    f"Tenant auth failed for {tenant_id} with invalid refresh_token, "
+                    f"re-authenticating base tokens and retrying..."
+                )
+                # Сбросим базовые токены и получим новые
+                self.base_access = None
+                self.base_refresh = None
+                self.base_exp = None
+
+                ok = await self._request_tokens_by_password(client)
+                if not ok or not self.base_refresh:
+                    logger.error(
+                        "Re-authentication by password failed, cannot obtain tenant token"
+                    )
+                    return False
+
+                # Пойдём по циклу ещё раз с новым self.base_refresh
+                continue
+
+            # Любая другая ошибка — логируем и выходим
             logger.error(
                 f"Tenant auth failed for {tenant_id}: {r.status_code} {r.text}"
             )
             return False
 
-        data = r.json()
-        access = data.get("access_token")
-        refresh = data.get("refresh_token")
-        exp = _jwt_exp(access or "")
-
-        self.tenants[tenant_id] = {
-            "access": access,
-            "refresh": refresh,
-            "exp": exp,
-        }
-        logger.success(f"Tenant {tenant_id} token obtained")
-        return True
 
     # ---------- public API ----------
 
@@ -179,6 +231,7 @@ class TokenManager:
 
                 if access and isinstance(exp, int) and exp - now > 30:
                     return access  # type: ignore[return-value]
+
 
 
             ok = await self._request_tokens_for_tenant(client, tenant_id)

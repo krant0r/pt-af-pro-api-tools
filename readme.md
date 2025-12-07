@@ -59,3 +59,12 @@ export API_PASSWORD="your-password"
 
 # Run one-shot snapshot export
 python init_snapshots.py
+
+
+# через env
+PTAF_ACTION_SEQUENCE=1,2 python run_sequence.py
+
+# через параметр
+python run_sequence.py --actions 1,2,3
+
+```

@@ -3,14 +3,13 @@ from __future__ import annotations
 """
 Central configuration for pt-af-pro-api-tools.
 
-All values are taken from environment variables so that the code can be safely
-used in Docker / docker-compose and on bare metal.
+Все значения берутся из переменных окружения, чтобы код можно было безопасно
+использовать в Docker / docker-compose и на bare metal.
 
-Secrets (tokens / passwords) are expected to be passed either:
-- directly via env variables, e.g. API_PASSWORD=...; or
-- via "FILE" companions, e.g. API_PASSWORD_FILE=/run/secrets/waf_api_password
-
-In the second case the file content is read and used as the value.
+Секреты (tokens / пароли) ожидаются либо:
+- напрямую через env, например API_PASSWORD=...;
+- либо через пары вида API_PASSWORD_FILE=/run/secrets/waf_api_password.
+В этом случае читается содержимое файла.
 """
 
 import os
@@ -19,7 +18,7 @@ from typing import Optional
 
 from dotenv import load_dotenv
 
-# Load .env if present (useful for local development, not required in Docker)
+# Load .env if present (локальная разработка, в Docker не обязателен)
 load_dotenv()
 
 
@@ -31,12 +30,11 @@ def _to_bool(val: Optional[str], default: bool = False) -> bool:
 
 def _to_opt_bool(val: Optional[str]) -> Optional[bool]:
     """
-    Ternary bool parser:
-
-    None / ""          -> None
-    "1,true,yes,on,.." -> True
-    "0,false,no,off,.."-> False
-    Any other garbage  -> None (fail-safe).
+    Троичное bool-значение:
+    None / ""         -> None
+    "1,true,yes,on"   -> True
+    "0,false,no,off"  -> False
+    мусор             -> None (fail-safe)
     """
     if val is None:
         return None
@@ -53,13 +51,13 @@ def _to_opt_bool(val: Optional[str]) -> Optional[bool]:
 
 def _read_secret(var_name: str, file_var_name: str) -> str:
     """
-    Helper for reading secrets in a Docker-friendly way.
+    Helper для чтения секретов в Docker-friendly стиле.
 
-    Priority:
-      1. *_FILE env var pointing to file with secret.
-      2. Plain env var.
+    Приоритет:
+      1. *_FILE env с путём до файла.
+      2. Обычная переменная окружения.
 
-    Returns empty string if nothing found.
+    Возвращает "" если ничего не найдено.
     """
     file_path = os.getenv(file_var_name)
     if file_path:
@@ -68,29 +66,32 @@ def _read_secret(var_name: str, file_var_name: str) -> str:
             if content:
                 return content
         except Exception:
-            # Do not crash on bad secret file, just fall back to env var.
+            # не падаем, просто откатываемся к обычному env
             pass
+
     return (os.getenv(var_name) or "").strip()
 
 
 class Config:
     def __init__(self) -> None:
-        # ---------- Basic paths ----------
+        # ---------- Базовые пути ----------
         self.BASE_DIR: Path = Path(__file__).resolve().parent.parent
 
-        # ---------- Logging ----------
+        # ---------- Логирование ----------
         self.LOG_LEVEL: str = os.getenv("LOG_LEVEL", "INFO").upper()
-        log_file = os.getenv("LOG_FILE", str(self.BASE_DIR / "logs" / "ptaf-web.log"))
+        log_file = os.getenv(
+            "LOG_FILE", str(self.BASE_DIR / "logs" / "ptaf-web.log")
+        )
         self.LOG_FILE: Path = Path(log_file)
 
-        # ---------- WAF API connection ----------
-        # Base URL of PTAF PRO instance, e.g. "https://ptaf.example.com"
+        # ---------- Подключение к WAF API ----------
+        # URL инстанса PTAF PRO, например "https://ptaf.example.com"
         self.AF_URL: str = os.getenv("AF_URL", "").rstrip("/")
 
-        # API path prefix, usually "/api/ptaf/v4"
+        # Префикс API, обычно "/api/ptaf/v4"
         self.API_PATH: str = os.getenv("API_PATH", "/api/ptaf/v4").rstrip("/")
 
-        # SSL verification: "true"/"false" or path to CA/cert file
+        # SSL verification: "true"/"false" или путь до CA/cert
         verify_ssl_env = os.getenv("VERIFY_SSL", "true")
         lower = verify_ssl_env.strip().lower()
         if lower in {"true", "1", "yes", "on"}:
@@ -98,55 +99,72 @@ class Config:
         elif lower in {"false", "0", "no", "off"}:
             self.VERIFY_SSL = False
         else:
-            # Treat as path to CA/cert
+            # трактуем как путь до CA/cert
             self.VERIFY_SSL = verify_ssl_env
 
-        # Request timeout in seconds
+        # Таймаут запросов
         self.REQUEST_TIMEOUT: float = float(os.getenv("REQUEST_TIMEOUT", "30"))
 
         # ---------- Auth credentials ----------
-        # Static API token (if present, username/password are ignored)
+        # Статичный API token (если задан, username/password игнорируются)
         self.API_TOKEN: str = _read_secret("API_TOKEN", "API_TOKEN_FILE")
 
-        # Credentials for JWT-based auth
+        # Логин/пароль для JWT
         self.API_LOGIN: str = _read_secret("API_LOGIN", "API_LOGIN_FILE")
         self.API_PASSWORD: str = _read_secret("API_PASSWORD", "API_PASSWORD_FILE")
 
-        # Optional LDAP auth toggle:
-        #   LDAP_AUTH not set  -> do not send "ldap" at all
-        #   LDAP_AUTH=true/1   -> send "ldap": true
-        #   LDAP_AUTH=false/0  -> send "ldap": false
+        # Необязательный флаг LDAP:
+        # LDAP_AUTH не задан     -> не отправляем "ldap"
+        # LDAP_AUTH=true/1/...   -> "ldap": true
+        # LDAP_AUTH=false/0/...  -> "ldap": false
         self.LDAP_AUTH: Optional[bool] = _to_opt_bool(os.getenv("LDAP_AUTH"))
 
-        # ---------- Snapshot / tenants endpoints ----------
-        # These match PTAF PRO defaults but can be overridden via env if needed
+        # ---------- Endpoints ----------
+        # Список тенантов
         self.TENANTS_ENDPOINT: str = os.getenv(
             "TENANTS_ENDPOINT", f"{self.API_PATH}/auth/account/tenants"
         )
 
-        # Global snapshot endpoint (import/export full config of *current* tenant)
+        # Глобальный снапшот конфигурации текущего тенанта
         self.SNAPSHOT_ENDPOINT: str = os.getenv(
             "SNAPSHOT_ENDPOINT", f"{self.API_PATH}/config/snapshot"
         )
 
-        # Directory where JSON snapshots of tenants are stored
+        # Эндпоинты для правил и действий (по умолчанию — типичные пути PTAF PRO)
+        self.RULES_ENDPOINT: str = os.getenv(
+            "RULES_ENDPOINT", f"{self.API_PATH}/config/rules"
+        )
+        self.ACTIONS_ENDPOINT: str = os.getenv(
+            "ACTIONS_ENDPOINT", f"{self.API_PATH}/config/actions"
+        )
+
+        # ---------- Директории для JSON-экспортов ----------
         self.SNAPSHOTS_DIR: Path = Path(
             os.getenv("SNAPSHOTS_DIR", str(self.BASE_DIR / "snapshots"))
         ).resolve()
 
-        # Ensure directories exist for local runs (in Docker volumes will be mounted)
+        self.RULES_DIR: Path = Path(
+            os.getenv("RULES_DIR", str(self.BASE_DIR / "rules"))
+        ).resolve()
+
+        self.ACTIONS_DIR: Path = Path(
+            os.getenv("ACTIONS_DIR", str(self.BASE_DIR / "actions"))
+        ).resolve()
+
+        # Создаём директории (в Docker обычно будут volume-ы)
         self.LOG_FILE.parent.mkdir(parents=True, exist_ok=True)
         self.SNAPSHOTS_DIR.mkdir(parents=True, exist_ok=True)
+        self.RULES_DIR.mkdir(parents=True, exist_ok=True)
+        self.ACTIONS_DIR.mkdir(parents=True, exist_ok=True)
 
     @property
     def auth_method(self) -> str:
         """
-        Returns which auth method is configured:
+        Какой метод авторизации включён:
+          - "token"    — статичный API_TOKEN
+          - "password" — username/password (JWT)
 
-        - "token"    — static API_TOKEN
-        - "password" — username/password (JWT)
-
-        Raises if nothing is configured.
+        Бросает исключение, если ничего не задано.
         """
         if self.API_TOKEN:
             return "token"

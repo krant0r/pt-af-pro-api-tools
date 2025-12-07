@@ -209,7 +209,7 @@ __marimo__/
 
 
 .env.*
-snapshots/
+data/
 logs/
 
 secrets/*.txt
