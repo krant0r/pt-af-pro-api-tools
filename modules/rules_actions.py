@@ -207,7 +207,7 @@ def _normalize_label(label: str) -> str:
     return label.replace("-", " ").replace("_", " ").strip().lower()
 
 
-def _read_display_name(path: Path) -> str:
+def _read_display_name(path: Path, suffix: str) -> str:
     """
     Try to extract human-friendly name from exported JSON payload.
 
@@ -253,7 +253,7 @@ def list_local_exports(base: Path, suffix: str) -> List[Dict[str, Any]]:
             files_meta.append(
                 {
                     "filename": path.name,
-                    "display_name": _read_display_name(path),
+                    "display_name": _read_display_name(path, suffix),
                 }
             )
 
