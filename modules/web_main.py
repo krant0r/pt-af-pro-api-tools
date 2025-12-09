@@ -13,7 +13,9 @@ from .auth import TokenManager
 from .config import config
 from .rules_actions import (
     export_actions_for_tenant,
+    export_actions_for_all_tenants,
     export_rules_for_tenant,
+    export_rules_for_all_tenants,
     import_action_payload,
     import_rule_payload,
     list_local_exports,
@@ -284,6 +286,16 @@ async def api_export_rules(tenant_id: str):
     }
 
 
+@app.post("/api/tenants/rules/export-all")
+async def api_export_rules_all():
+    files = await export_rules_for_all_tenants(token_manager)
+
+    return {
+        "exported": len(files),
+        "files": [str(p) for p in files],
+    }
+
+
 @app.post("/api/tenants/{tenant_id}/actions/export")
 async def api_export_actions(tenant_id: str):
     tenant = await _find_tenant(tenant_id)
@@ -298,6 +310,16 @@ async def api_export_actions(tenant_id: str):
         timeout=config.REQUEST_TIMEOUT,
     ) as client:
         files = await export_actions_for_tenant(client, token_manager, tenant)
+
+    return {
+        "exported": len(files),
+        "files": [str(p) for p in files],
+    }
+
+
+@app.post("/api/tenants/actions/export-all")
+async def api_export_actions_all():
+    files = await export_actions_for_all_tenants(token_manager)
 
     return {
         "exported": len(files),
@@ -769,8 +791,8 @@ INDEX_HTML = """
   <div class="settings-panel">
     <div class="settings-actions">
       <code>3</code> –
-      <span id="a3-en">Export actions for selected tenant</span>
-      <span id="a3-ru" class="hidden">Экспорт действий для выбранного тенанта</span>
+      <span id="a3-en">Export actions for selected tenant(s)</span>
+      <span id="a3-ru" class="hidden">Экспорт действий для выбранного или всех тенантов</span>
       <button onclick="runActionsExport()">Run</button>
     </div>
 
@@ -811,8 +833,8 @@ INDEX_HTML = """
   <div class="settings-panel">
     <div class="settings-actions">
       <code>2</code> –
-      <span id="a2-en">Export rules for selected tenant</span>
-      <span id="a2-ru" class="hidden">Экспорт правил для выбранного тенанта</span>
+      <span id="a2-en">Export rules for selected tenant(s)</span>
+      <span id="a2-ru" class="hidden">Экспорт правил для выбранного или всех тенантов</span>
       <button onclick="runRulesExport()">Run</button>
     </div>
 
@@ -924,7 +946,7 @@ INDEX_HTML = """
         languageSelect.value = lang;
       }
 
-      populateTenantSelect("tenant-select");
+      populateTenantSelect("tenant-select", true);
       populateTenantSelect("import-tenant-select", true);
 
       setTheme(currentTheme);
@@ -1137,7 +1159,7 @@ INDEX_HTML = """
       }
       const data = await resp.json();
       tenantsCache = data;
-      populateTenantSelect("tenant-select");
+      populateTenantSelect("tenant-select", true);
       populateTenantSelect("import-tenant-select", true);
       log("Loaded " + data.length + " tenants");
     }
@@ -1177,15 +1199,19 @@ INDEX_HTML = """
         log("No tenant selected");
         return;
       }
+      const isAll = tenantId === "__all__";
       log(
-        "Running action 2 (export rules for tenant " +
-          tenantId +
-          ") [sequence: 2]"
+        isAll
+          ? "Running action 2 (export rules for all tenants) [sequence: 2]"
+          :
+            "Running action 2 (export rules for tenant " +
+              tenantId +
+              ") [sequence: 2]"
       );
-      const resp = await fetch(
-        "/api/tenants/" + encodeURIComponent(tenantId) + "/rules/export",
-        { method: "POST" }
-      );
+      const endpoint = isAll
+        ? "/api/tenants/rules/export-all"
+        : "/api/tenants/" + encodeURIComponent(tenantId) + "/rules/export";
+      const resp = await fetch(endpoint, { method: "POST" });
       const data = await resp.json();
       log("Rules export result: " + JSON.stringify(data));
       if (resp.ok) {
@@ -1288,15 +1314,19 @@ INDEX_HTML = """
         log("No tenant selected");
         return;
       }
+      const isAll = tenantId === "__all__";
       log(
-        "Running action 3 (export actions for tenant " +
-          tenantId +
-          ") [sequence: 3]"
+        isAll
+          ? "Running action 3 (export actions for all tenants) [sequence: 3]"
+          :
+            "Running action 3 (export actions for tenant " +
+              tenantId +
+              ") [sequence: 3]"
       );
-      const resp = await fetch(
-        "/api/tenants/" + encodeURIComponent(tenantId) + "/actions/export",
-        { method: "POST" }
-      );
+      const endpoint = isAll
+        ? "/api/tenants/actions/export-all"
+        : "/api/tenants/" + encodeURIComponent(tenantId) + "/actions/export";
+      const resp = await fetch(endpoint, { method: "POST" });
       const data = await resp.json();
       log("Actions export result: " + JSON.stringify(data));
       if (resp.ok) {
