@@ -957,18 +957,36 @@ INDEX_HTML = """
         return;
       }
 
+      const layout = document.querySelector(".layout");
+      const content = document.querySelector(".content");
+      if (!layout || !content) {
+        return;
+      }
+
+      const layoutRect = layout.getBoundingClientRect();
+      const contentRect = content.getBoundingClientRect();
       const panelRect = logPanel.getBoundingClientRect();
+      const layoutStyles = window.getComputedStyle(layout);
+      const gap = Number.parseFloat(
+        layoutStyles.columnGap || layoutStyles.gap || "0"
+      );
+      const isSingleColumn = layoutStyles.gridTemplateColumns
+        .split(" ")
+        .filter(Boolean).length < 2;
+
       const availableHeight = window.innerHeight - panelRect.top - 16;
       const targetHeight = Math.max(200, availableHeight);
-      const availableWidthPx = Math.max(320, window.innerWidth - panelRect.left - 24);
-      const availableWidthPercent = Math.min(
-        100,
-        (availableWidthPx / window.innerWidth) * 100
+
+      const availableWidthPx = Math.max(
+        320,
+        isSingleColumn
+          ? layoutRect.width
+          : layoutRect.width - contentRect.width - gap
       );
 
       logEl.style.height = `${targetHeight}px`;
       logEl.style.maxHeight = `${targetHeight}px`;
-      logEl.style.width = `${availableWidthPercent}%`;
+      logEl.style.width = `${availableWidthPx}px`;
       logEl.style.maxWidth = `${availableWidthPx}px`;
     }
 
