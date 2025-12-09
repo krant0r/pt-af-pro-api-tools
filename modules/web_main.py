@@ -492,7 +492,7 @@ INDEX_HTML = """
 
     .layout {
       display: grid;
-      grid-template-columns: minmax(0, 1fr) minmax(420px, 42vw);
+      grid-template-columns: minmax(0, 1fr) minmax(32vw, 45%);
       gap: 1rem;
       align-items: start;
     }
@@ -960,10 +960,16 @@ INDEX_HTML = """
       const panelRect = logPanel.getBoundingClientRect();
       const availableHeight = window.innerHeight - panelRect.top - 16;
       const targetHeight = Math.max(200, availableHeight);
+      const availableWidthPx = Math.max(320, window.innerWidth - panelRect.left - 24);
+      const availableWidthPercent = Math.min(
+        100,
+        (availableWidthPx / window.innerWidth) * 100
+      );
 
       logEl.style.height = `${targetHeight}px`;
       logEl.style.maxHeight = `${targetHeight}px`;
-      logEl.style.width = "100%";
+      logEl.style.width = `${availableWidthPercent}%`;
+      logEl.style.maxWidth = `${availableWidthPx}px`;
     }
 
     window.addEventListener("resize", adjustLogSize);
