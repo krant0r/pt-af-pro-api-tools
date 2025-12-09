@@ -490,6 +490,31 @@ INDEX_HTML = """
       transition: background 0.2s ease, color 0.2s ease;
     }
 
+    .layout {
+      display: grid;
+      grid-template-columns: minmax(0, 2fr) minmax(260px, 1fr);
+      gap: 1rem;
+      align-items: start;
+    }
+
+    .content {
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+    }
+
+    .log-panel {
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+    }
+
+    @media (max-width: 960px) {
+      .layout {
+        grid-template-columns: 1fr;
+      }
+    }
+
     button,
     select,
     input[type="file"] {
@@ -545,7 +570,8 @@ INDEX_HTML = """
     .log {
       border: 1px solid var(--border-color);
       padding: 0.5rem;
-      max-height: 300px;
+      max-height: 80vh;
+      min-height: 300px;
       overflow-y: auto;
       background: var(--panel-bg);
       border-radius: 8px;
@@ -564,7 +590,9 @@ INDEX_HTML = """
     <button id="settings-toggle" onclick="toggleSettings()">⚙️ Settings</button>
   </div>
 
-  <div id="settings-panel" class="settings-panel hidden">
+  <div class="layout">
+    <div class="content">
+      <div id="settings-panel" class="settings-panel hidden">
     <h2 id="settings-title-en">Settings</h2>
     <h2 id="settings-title-ru" class="hidden">Настройки</h2>
 
@@ -819,9 +847,14 @@ INDEX_HTML = """
     <button onclick="loadLocalExports()">Reload exported files list</button>
   </div>
 
-  <h2 id="log-title-en">Log</h2>
-  <h2 id="log-title-ru" class="hidden">Лог</h2>
-  <div id="log" class="log"></div>
+    </div>
+
+    <aside class="log-panel">
+      <h2 id="log-title-en">Log</h2>
+      <h2 id="log-title-ru" class="hidden">Лог</h2>
+      <div id="log" class="log"></div>
+    </aside>
+  </div>
 
   <script>
     let currentLang = "ru";
