@@ -571,7 +571,9 @@ INDEX_HTML = """
       border: 1px solid var(--border-color);
       padding: 0.5rem;
       max-height: 80vh;
-      min-height: 300px;
+      min-height: 240px;
+      box-sizing: border-box;
+      width: 100%;
       overflow-y: auto;
       background: var(--panel-bg);
       border-radius: 8px;
@@ -947,6 +949,24 @@ INDEX_HTML = """
     function toggleSettings() {
       document.getElementById("settings-panel").classList.toggle("hidden");
     }
+
+    function adjustLogSize() {
+      const logEl = document.getElementById("log");
+      const logPanel = logEl?.closest(".log-panel");
+      if (!logEl || !logPanel) {
+        return;
+      }
+
+      const panelRect = logPanel.getBoundingClientRect();
+      const availableHeight = window.innerHeight - panelRect.top - 16;
+      const targetHeight = Math.max(200, availableHeight);
+
+      logEl.style.height = `${targetHeight}px`;
+      logEl.style.maxHeight = `${targetHeight}px`;
+      logEl.style.width = "100%";
+    }
+
+    window.addEventListener("resize", adjustLogSize);
 
     function log(msg) {
       const el = document.getElementById("log");
@@ -1415,12 +1435,15 @@ INDEX_HTML = """
     }
 
     async function initUi() {
+      adjustLogSize();
       await loadSettings();
       await loadTenants();
       await loadLocalExports();
       setTheme(currentTheme);
+      adjustLogSize();
     }
 
+    window.addEventListener("load", adjustLogSize);
     initUi().catch((e) => log("Error: " + e));
   </script>
 </body>
