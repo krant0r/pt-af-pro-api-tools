@@ -270,17 +270,25 @@ class TenantAuth(httpx.Auth):
             request.headers["Authorization"] = f"Bearer {token}"
             response = yield request
 
-            # On 401 we try once more (only for password auth)
-            if response.status_code == 401 and config.auth_method == "password":
+            # On 401/403 we try once more (only for password auth)
+            if response.status_code in (401, 403) and config.auth_method == "password":
                 async with httpx.AsyncClient(
                     verify=config.VERIFY_SSL,
                     timeout=config.REQUEST_TIMEOUT,
                 ) as client2:
                     if self.tenant_id:
+                        logger.warning(
+                            f"Auth challenge ({response.status_code}). Refreshing tenant token for {self.tenant_id}"
+                        )
+                        # Drop cached token to force refresh
+                        self.tm.tenants.pop(self.tenant_id, None)
                         token = await self.tm.ensure_tenant_token(
                             client2, self.tenant_id
                         )
                     else:
+                        logger.warning(
+                            f"Auth challenge ({response.status_code}). Refreshing base token"
+                        )
                         token = await self.tm.ensure_base_token(client2)
 
                     if token:
