@@ -126,11 +126,15 @@ async def export_rules_for_all_tenants(tm: TokenManager) -> List[Path]:
     return created
 
 
-async def export_actions_for_all_tenants(tm: TokenManager) -> List[Path]:
+async def export_actions_for_all_tenants(tm: TokenManager) -> Tuple[List[Path], List[str]]:
     """
     Массовый экспорт actions для всех тенантов в config.ACTIONS_DIR.
+
+    Возвращает список созданных файлов и список ошибок, которые нужно показать
+    пользователю (например, при сбое запроса к general-tenant).
     """
     created: List[Path] = []
+    errors: List[str] = []
     async with httpx.AsyncClient(
         verify=config.VERIFY_SSL,
         timeout=config.REQUEST_TIMEOUT,
@@ -138,12 +142,24 @@ async def export_actions_for_all_tenants(tm: TokenManager) -> List[Path]:
         tenants = await fetch_tenants(client, tm)
         if not tenants:
             logger.warning("No tenants returned by API (actions export)")
-            return []
+            return [], []
 
         for tenant in tenants:
-            created.extend(await export_actions_for_tenant(client, tm, tenant))
+            tenant_id = str(tenant.get("id"))
+            try:
+                created.extend(await export_actions_for_tenant(client, tm, tenant))
+            except httpx.HTTPStatusError as exc:
+                if tenant_id == "00000000-0000-0000-0000-000000000000":
+                    msg = (
+                        f"[tenant={tenant_id}] Failed to export actions: "
+                        f"{exc}"
+                    )
+                    logger.error(msg)
+                    errors.append(msg)
+                    continue
+                raise
 
-    return created
+    return created, errors
 
 
 # ---------------------------------------------------------------------------

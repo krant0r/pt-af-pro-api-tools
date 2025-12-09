@@ -25,7 +25,11 @@ async def _action_export_rules(tm: TokenManager) -> None:
 
 
 async def _action_export_actions(tm: TokenManager) -> None:
-    await export_actions_for_all_tenants(tm)
+    files, errors = await export_actions_for_all_tenants(tm)
+    if errors:
+        for err in errors:
+            logger.error(err)
+    logger.info(f"Exported {len(files)} action files")
 
 
 ACTIONS: Dict[int, ActionFunc] = {

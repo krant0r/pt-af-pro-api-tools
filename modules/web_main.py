@@ -319,11 +319,12 @@ async def api_export_actions(tenant_id: str):
 
 @app.post("/api/tenants/actions/export-all")
 async def api_export_actions_all():
-    files = await export_actions_for_all_tenants(token_manager)
+    files, errors = await export_actions_for_all_tenants(token_manager)
 
     return {
         "exported": len(files),
         "files": [str(p) for p in files],
+        "errors": errors,
     }
 
 
