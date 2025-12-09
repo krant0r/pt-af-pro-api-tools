@@ -492,7 +492,7 @@ INDEX_HTML = """
 
     .layout {
       display: grid;
-      grid-template-columns: minmax(0, 2fr) minmax(260px, 1fr);
+      grid-template-columns: minmax(0, 1fr) minmax(420px, 42vw);
       gap: 1rem;
       align-items: start;
     }
