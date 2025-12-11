@@ -43,6 +43,9 @@ token_manager = TokenManager()
 
 @app.on_event("startup")
 async def _startup() -> None:
+    # Always reload settings from disk on startup to apply persisted changes
+    # from the last session (data/settings.json).
+    config.reload_from_sources()
     logger.add(str(config.LOG_FILE), level=config.LOG_LEVEL)
     removed = cleanup_old_snapshots()
     if removed:
