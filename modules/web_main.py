@@ -491,10 +491,11 @@ INDEX_HTML = """
     }
 
     .layout {
-      display: grid;
-      grid-template-columns: minmax(0, 1fr) minmax(32vw, 45%);
+      max-width: 1280px;
+      margin: 0 auto;
+      display: flex;
+      flex-direction: column;
       gap: 1rem;
-      align-items: start;
     }
 
     .content {
@@ -507,12 +508,6 @@ INDEX_HTML = """
       display: flex;
       flex-direction: column;
       gap: 0.75rem;
-    }
-
-    @media (max-width: 960px) {
-      .layout {
-        grid-template-columns: 1fr;
-      }
     }
 
     button,
@@ -548,6 +543,10 @@ INDEX_HTML = """
       max-width: 520px;
     }
 
+    .settings-panel.slim {
+      max-width: none;
+    }
+
     .settings-row {
       display: flex;
       flex-direction: column;
@@ -563,6 +562,55 @@ INDEX_HTML = """
       display: flex;
       gap: 0.5rem;
       flex-wrap: wrap;
+    }
+
+    .transfer-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+      gap: 1rem;
+      align-items: start;
+    }
+
+    .column-panel {
+      background: var(--panel-bg);
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      padding: 1rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+    }
+
+    .panel-header {
+      display: flex;
+      flex-direction: column;
+      gap: 0.35rem;
+    }
+
+    .chip-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.35rem;
+    }
+
+    .chip {
+      background: color-mix(in srgb, var(--accent-color) 12%, transparent);
+      color: var(--text-color);
+      border: 1px solid var(--border-color);
+      border-radius: 999px;
+      padding: 0.25rem 0.6rem;
+      font-size: 0.9rem;
+    }
+
+    .two-cols {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 1rem;
+    }
+
+    .subtle {
+      color: #475569;
+      margin: 0;
     }
 
     .hidden { display: none; }
@@ -695,168 +743,187 @@ INDEX_HTML = """
 
   <p id="desc-en">
     Minimal experimental web UI on top of FastAPI backend.<br/>
-    Choose tenant, then run one of the numbered actions.<br/>
-    These numbers correspond to CLI sequence codes.
+    Left column shows what we read from the platform, right column – where we
+    send it.
   </p>
   <p id="desc-ru" class="hidden">
     Минимальный экспериментальный веб-интерфейс поверх FastAPI.<br/>
-    Выбери тенант, затем запусти одно из пронумерованных действий.<br/>
-    Эти номера совпадают с кодами действий в CLI-последовательности.
+    Слева — откуда и что читаем, справа — куда отправляем.
   </p>
 
-  <h2 id="section-tenant-en">1. Tenants & snapshots</h2>
-  <h2 id="section-tenant-ru" class="hidden">1. Тенанты и снепшоты</h2>
-
-  <div class="settings-panel">
-    <div class="settings-actions">
-      <code>1</code> –
-      <span id="a1-en">Export snapshots for all tenants</span>
-      <span id="a1-ru" class="hidden">Экспорт снапшотов всех тенантов</span>
-      <button onclick="runSnapshots()">Run</button>
-    </div>
-
-    <div class="settings-actions">
-      <button onclick="loadTenants()">Reload tenants</button>
-      <button onclick="logSnapshotApplications()">
-        <span id="snapshot-apps-en">Apps from snapshots (.json) → log</span>
-        <span id="snapshot-apps-ru" class="hidden">Приложения из .json → лог</span>
-      </button>
-      <button onclick="logSnapshotHosts()">
-        <span id="snapshot-hosts-en">Hosts from snapshots (.json) → log</span>
-        <span id="snapshot-hosts-ru" class="hidden">Хосты из .json → лог</span>
-      </button>
-      <button onclick="logSnapshotTenantHosts()">
-        <span id="snapshot-tenant-hosts-en">Tenant + hosts (.json) → log</span>
-        <span id="snapshot-tenant-hosts-ru" class="hidden">
-          Тенант + хосты (.json) → лог
-        </span>
-      </button>
-    </div>
-
-    <div class="settings-row">
-      <label>
-        <span id="tenant-export-label-en">Tenant for export actions:</span>
-        <span id="tenant-export-label-ru" class="hidden">
-          Тенант для экспортных операций:
-        </span>
-      </label>
-      <select id="tenant-select"></select>
-    </div>
-
-    <div class="settings-row">
-      <label>
-        <span id="tenant-import-label-en">Tenant(s) for import:</span>
-        <span id="tenant-import-label-ru" class="hidden">Тенант(ы) для импорта:</span>
-      </label>
-      <select id="import-tenant-select"></select>
-      <small id="tenant-import-hint-en">Choose specific tenant or "All tenants".</small>
-      <small id="tenant-import-hint-ru" class="hidden">Выбери конкретный тенант или «Все тенанты».</small>
-    </div>
-  </div>
-
-  <p>
-    <span id="import-text-en">
-      Choose target tenant(s) above, then use import/export buttons below.
-    </span>
-    <span id="import-text-ru" class="hidden">
-      Выбери тенант(ы) для импорта выше, затем используй кнопки ниже.
-    </span>
-  </p>
-
-  <h2 id="section-actions-en">3. Actions</h2>
-  <h2 id="section-actions-ru" class="hidden">3. Действия</h2>
-
-  <div class="settings-panel">
-    <div class="settings-actions">
-      <code>3</code> –
-      <span id="a3-en">Export actions for selected tenant</span>
-      <span id="a3-ru" class="hidden">Экспорт действий для выбранного тенанта</span>
-      <button onclick="runActionsExport()">Run</button>
-    </div>
-
-    <div class="settings-row">
-      <label>
-        <span id="import-actions-title-en">Import action JSON</span>
-        <span id="import-actions-title-ru" class="hidden">Импорт JSON действия</span>
-      </label>
-      <input type="file" id="action-file-input" />
-      <div>
-        <button onclick="importAction()">Import action JSON</button>
+  <div class="transfer-grid">
+    <section class="column-panel">
+      <div class="panel-header">
+        <h2 id="from-title-en">From: what we export/import</h2>
+        <h2 id="from-title-ru" class="hidden">Откуда и что берём</h2>
+        <div class="chip-row">
+          <span class="chip">All tenant</span>
+          <span class="chip">Tenant</span>
+          <span class="chip">Web application(s)</span>
+          <span class="chip">Action(s)</span>
+          <span class="chip">User rule(s)</span>
+        </div>
       </div>
-    </div>
 
-    <h3 id="local-import-title-en">Or use exported files from /data</h3>
-    <h3 id="local-import-title-ru" class="hidden">
-      Или выбери уже выгруженные файлы из /data
-    </h3>
+      <div class="settings-panel slim">
+        <div class="settings-actions">
+          <code>1</code> –
+          <span id="a1-en">Export snapshots for all tenants</span>
+          <span id="a1-ru" class="hidden">Экспорт снапшотов всех тенантов</span>
+          <button onclick="runSnapshots()">Run</button>
+        </div>
 
-    <div class="settings-row">
-      <label>
-        <span id="local-actions-label-en">Actions from tenant (by name):</span>
-        <span id="local-actions-label-ru" class="hidden">
-          Действия из тенанта (по названию):
-        </span>
-      </label>
-      <div class="settings-actions">
-        <select id="local-actions-tenant" onchange="updateLocalFiles('action')"></select>
-        <select id="local-actions-file"></select>
-        <button onclick="importActionFromLocal()">Import selected action</button>
+        <div class="settings-actions">
+          <button onclick="loadTenants()">Reload tenants</button>
+          <button onclick="logSnapshotApplications()">
+            <span id="snapshot-apps-en">Apps from snapshots (.json) → log</span>
+            <span id="snapshot-apps-ru" class="hidden">Приложения из .json → лог</span>
+          </button>
+          <button onclick="logSnapshotHosts()">
+            <span id="snapshot-hosts-en">Hosts from snapshots (.json) → log</span>
+            <span id="snapshot-hosts-ru" class="hidden">Хосты из .json → лог</span>
+          </button>
+          <button onclick="logSnapshotTenantHosts()">
+            <span id="snapshot-tenant-hosts-en">Tenant + hosts (.json) → log</span>
+            <span id="snapshot-tenant-hosts-ru" class="hidden">
+              Тенант + хосты (.json) → лог
+            </span>
+          </button>
+        </div>
+
+        <div class="settings-row">
+          <label>
+            <span id="tenant-export-label-en">Tenant for export ("All tenants" supported):</span>
+            <span id="tenant-export-label-ru" class="hidden">
+              Тенант для экспорта (можно выбрать «Все тенанты»):
+            </span>
+          </label>
+          <select id="tenant-select"></select>
+          <small>
+            <span id="tenant-export-hint-en">Use a specific tenant or run exports for all of them.</span>
+            <span id="tenant-export-hint-ru" class="hidden">Можно выбрать конкретный тенант или запустить экспорт для всех.</span>
+          </small>
+        </div>
+
+        <div class="settings-actions">
+          <code>2</code> –
+          <span id="a2-en">Export rules</span>
+          <span id="a2-ru" class="hidden">Экспорт правил</span>
+          <button onclick="runRulesExport()">Run</button>
+
+          <code>3</code> –
+          <span id="a3-en">Export actions</span>
+          <span id="a3-ru" class="hidden">Экспорт действий</span>
+          <button onclick="runActionsExport()">Run</button>
+        </div>
       </div>
-    </div>
-  </div>
+    </section>
 
-  <h2 id="section-rules-en">4. Rules</h2>
-  <h2 id="section-rules-ru" class="hidden">4. Правила</h2>
-
-  <div class="settings-panel">
-    <div class="settings-actions">
-      <code>2</code> –
-      <span id="a2-en">Export rules for selected tenant</span>
-      <span id="a2-ru" class="hidden">Экспорт правил для выбранного тенанта</span>
-      <button onclick="runRulesExport()">Run</button>
-    </div>
-
-    <div class="settings-row">
-      <label>
-        <span id="import-rules-title-en">Import rule JSON</span>
-        <span id="import-rules-title-ru" class="hidden">Импорт JSON правила</span>
-      </label>
-      <input type="file" id="rule-file-input" />
-      <div>
-        <button onclick="importRule()">Import rule JSON</button>
+    <section class="column-panel">
+      <div class="panel-header">
+        <h2 id="to-title-en">To: where we deliver</h2>
+        <h2 id="to-title-ru" class="hidden">Куда отправляем</h2>
+        <div class="chip-row">
+          <span class="chip">.json file</span>
+          <span class="chip">Log</span>
+          <span class="chip">Tenant</span>
+          <span class="chip">Web application</span>
+          <span class="chip">Actions</span>
+          <span class="chip">User rules</span>
+        </div>
       </div>
-    </div>
 
-    <h3 id="local-rules-heading-en">Rules from local exports</h3>
-    <h3 id="local-rules-heading-ru" class="hidden">Правила из локальных выгрузок</h3>
+      <div class="settings-panel slim">
+        <div class="settings-row">
+          <label>
+            <span id="tenant-import-label-en">Tenant(s) for import:</span>
+            <span id="tenant-import-label-ru" class="hidden">Тенант(ы) для импорта:</span>
+          </label>
+          <select id="import-tenant-select"></select>
+          <small id="tenant-import-hint-en">Choose specific tenant or "All tenants".</small>
+          <small id="tenant-import-hint-ru" class="hidden">Выбери конкретный тенант или «Все тенанты».</small>
+        </div>
 
-    <div class="settings-row">
-      <label>
-        <span id="local-rules-label-en">Rules from tenant (by name):</span>
-        <span id="local-rules-label-ru" class="hidden">
-          Правила из тенанта (по названию):
-        </span>
-      </label>
-      <div class="settings-actions">
-        <select id="local-rules-tenant" onchange="updateLocalFiles('rule')"></select>
-        <select id="local-rules-file"></select>
-        <button onclick="importRuleFromLocal()">Import selected rule</button>
+        <div class="settings-row two-cols">
+          <div>
+            <label>
+              <span id="import-actions-title-en">Import action JSON</span>
+              <span id="import-actions-title-ru" class="hidden">Импорт JSON действия</span>
+            </label>
+            <input type="file" id="action-file-input" />
+            <div>
+              <button onclick="importAction()">Import action JSON</button>
+            </div>
+          </div>
+          <div>
+            <label>
+              <span id="import-rules-title-en">Import rule JSON</span>
+              <span id="import-rules-title-ru" class="hidden">Импорт JSON правила</span>
+            </label>
+            <input type="file" id="rule-file-input" />
+            <div>
+              <button onclick="importRule()">Import rule JSON</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="settings-row">
+          <h3 id="local-import-title-en">Local exports → tenants</h3>
+          <h3 id="local-import-title-ru" class="hidden">Локальные выгрузки → тенанты</h3>
+          <p class="subtle">
+            <span id="import-text-en">
+              Choose target tenant(s) above, then pick what to import below.
+            </span>
+            <span id="import-text-ru" class="hidden">
+              Выбери тенант(ы) для импорта выше, затем выбери источник ниже.
+            </span>
+          </p>
+        </div>
+
+        <div class="settings-row">
+          <label>
+            <span id="local-actions-label-en">Actions from tenant (by name):</span>
+            <span id="local-actions-label-ru" class="hidden">
+              Действия из тенанта (по названию):
+            </span>
+          </label>
+          <div class="settings-actions">
+            <select id="local-actions-tenant" onchange="updateLocalFiles('action')"></select>
+            <select id="local-actions-file"></select>
+            <button onclick="importActionFromLocal()">Import selected action</button>
+          </div>
+        </div>
+
+        <div class="settings-row">
+          <label>
+            <span id="local-rules-label-en">Rules from tenant (by name):</span>
+            <span id="local-rules-label-ru" class="hidden">
+              Правила из тенанта (по названию):
+            </span>
+          </label>
+          <div class="settings-actions">
+            <select id="local-rules-tenant" onchange="updateLocalFiles('rule')"></select>
+            <select id="local-rules-file"></select>
+            <button onclick="importRuleFromLocal()">Import selected rule</button>
+          </div>
+        </div>
+
+        <div class="settings-actions">
+          <button onclick="loadLocalExports()">Reload exported files list</button>
+        </div>
       </div>
-    </div>
+
+      <aside class="log-panel">
+        <h2 id="log-title-en">Log</h2>
+        <h2 id="log-title-ru" class="hidden">Лог</h2>
+        <div id="log" class="log"></div>
+      </aside>
+    </section>
   </div>
 
-  <div class="settings-actions">
-    <button onclick="loadLocalExports()">Reload exported files list</button>
-  </div>
+</div>
 
-    </div>
-
-    <aside class="log-panel">
-      <h2 id="log-title-en">Log</h2>
-      <h2 id="log-title-ru" class="hidden">Лог</h2>
-      <div id="log" class="log"></div>
-    </aside>
-  </div>
+</div>
 
   <script>
     let currentLang = "ru";
@@ -877,9 +944,8 @@ INDEX_HTML = """
       const ids = [
         ["title-en", "title-ru"],
         ["desc-en", "desc-ru"],
-        ["section-tenant-en", "section-tenant-ru"],
-        ["section-actions-en", "section-actions-ru"],
-        ["section-rules-en", "section-rules-ru"],
+        ["from-title-en", "from-title-ru"],
+        ["to-title-en", "to-title-ru"],
         ["import-text-en", "import-text-ru"],
         ["log-title-en", "log-title-ru"],
         ["a1-en", "a1-ru"],
@@ -901,12 +967,12 @@ INDEX_HTML = """
         ["local-import-title-en", "local-import-title-ru"],
         ["local-rules-label-en", "local-rules-label-ru"],
         ["local-actions-label-en", "local-actions-label-ru"],
+        ["tenant-export-hint-en", "tenant-export-hint-ru"],
         ["tenant-export-label-en", "tenant-export-label-ru"],
         ["tenant-import-label-en", "tenant-import-label-ru"],
         ["tenant-import-hint-en", "tenant-import-hint-ru"],
         ["import-actions-title-en", "import-actions-title-ru"],
         ["import-rules-title-en", "import-rules-title-ru"],
-        ["local-rules-heading-en", "local-rules-heading-ru"],
         ["snapshot-apps-en", "snapshot-apps-ru"],
         ["snapshot-hosts-en", "snapshot-hosts-ru"],
         ["snapshot-tenant-hosts-en", "snapshot-tenant-hosts-ru"],
@@ -924,7 +990,7 @@ INDEX_HTML = """
         languageSelect.value = lang;
       }
 
-      populateTenantSelect("tenant-select");
+      populateTenantSelect("tenant-select", true);
       populateTenantSelect("import-tenant-select", true);
 
       setTheme(currentTheme);
@@ -952,41 +1018,16 @@ INDEX_HTML = """
 
     function adjustLogSize() {
       const logEl = document.getElementById("log");
-      const logPanel = logEl?.closest(".log-panel");
-      if (!logEl || !logPanel) {
+      if (!logEl) {
         return;
       }
 
-      const layout = document.querySelector(".layout");
-      const content = document.querySelector(".content");
-      if (!layout || !content) {
-        return;
-      }
-
-      const layoutRect = layout.getBoundingClientRect();
-      const contentRect = content.getBoundingClientRect();
-      const panelRect = logPanel.getBoundingClientRect();
-      const layoutStyles = window.getComputedStyle(layout);
-      const gap = Number.parseFloat(
-        layoutStyles.columnGap || layoutStyles.gap || "0"
-      );
-      const isSingleColumn = layoutStyles.gridTemplateColumns
-        .split(" ")
-        .filter(Boolean).length < 2;
-
-      const availableHeight = window.innerHeight - panelRect.top - 16;
-      const targetHeight = Math.max(200, availableHeight);
-
-      const availableWidthPx = Math.max(
-        320,
-        isSingleColumn
-          ? layoutRect.width
-          : layoutRect.width - contentRect.width - gap
-      );
+      const rect = logEl.getBoundingClientRect();
+      const availableHeight = window.innerHeight - rect.top - 16;
+      const targetHeight = Math.max(240, availableHeight);
 
       logEl.style.height = `${targetHeight}px`;
       logEl.style.maxHeight = `${targetHeight}px`;
-      logEl.style.width = `${availableWidthPx}px`;
       logEl.style.maxWidth = `${availableWidthPx}px`;
     }
 
@@ -1137,14 +1178,22 @@ INDEX_HTML = """
       }
       const data = await resp.json();
       tenantsCache = data;
-      populateTenantSelect("tenant-select");
+      populateTenantSelect("tenant-select", true);
       populateTenantSelect("import-tenant-select", true);
       log("Loaded " + data.length + " tenants");
     }
 
-    function getSelectedTenantId() {
+    function getSelectedExportTenantIds() {
       const select = document.getElementById("tenant-select");
-      return select ? select.value : "";
+      if (!select) {
+        return [];
+      }
+
+      if (select.value === "__all__") {
+        return tenantsCache.map((t) => String(t.id)).filter(Boolean);
+      }
+
+      return select.value ? [select.value] : [];
     }
 
     function getImportTargetTenantIds() {
@@ -1172,25 +1221,25 @@ INDEX_HTML = """
     }
 
     async function runRulesExport() {
-      const tenantId = getSelectedTenantId();
-      if (!tenantId) {
+      const tenantIds = getSelectedExportTenantIds();
+      if (!tenantIds.length) {
         log("No tenant selected");
         return;
       }
-      log(
-        "Running action 2 (export rules for tenant " +
-          tenantId +
-          ") [sequence: 2]"
-      );
-      const resp = await fetch(
-        "/api/tenants/" + encodeURIComponent(tenantId) + "/rules/export",
-        { method: "POST" }
-      );
-      const data = await resp.json();
-      log("Rules export result: " + JSON.stringify(data));
-      if (resp.ok) {
-        await loadLocalExports();
+      for (const tenantId of tenantIds) {
+        log(
+          "Running action 2 (export rules for tenant " +
+            tenantId +
+            ") [sequence: 2]"
+        );
+        const resp = await fetch(
+          "/api/tenants/" + encodeURIComponent(tenantId) + "/rules/export",
+          { method: "POST" }
+        );
+        const data = await resp.json();
+        log("Rules export result: " + JSON.stringify(data));
       }
+      await loadLocalExports();
     }
 
     async function fetchSnapshotSummary(force = false) {
@@ -1283,25 +1332,27 @@ INDEX_HTML = """
     }
 
     async function runActionsExport() {
-      const tenantId = getSelectedTenantId();
-      if (!tenantId) {
+      const tenantIds = getSelectedExportTenantIds();
+      if (!tenantIds.length) {
         log("No tenant selected");
         return;
       }
-      log(
-        "Running action 3 (export actions for tenant " +
-          tenantId +
-          ") [sequence: 3]"
-      );
-      const resp = await fetch(
-        "/api/tenants/" + encodeURIComponent(tenantId) + "/actions/export",
-        { method: "POST" }
-      );
-      const data = await resp.json();
-      log("Actions export result: " + JSON.stringify(data));
-      if (resp.ok) {
-        await loadLocalExports();
+      for (const tenantId of tenantIds) {
+        log(
+          "Running action 3 (export actions for tenant " +
+            tenantId +
+            ") [sequence: 3]"
+        );
+        const resp = await fetch(
+          "/api/tenants/" +
+            encodeURIComponent(tenantId) +
+            "/actions/export",
+          { method: "POST" }
+        );
+        const data = await resp.json();
+        log("Actions export result: " + JSON.stringify(data));
       }
+      await loadLocalExports();
     }
 
     async function importRule() {
