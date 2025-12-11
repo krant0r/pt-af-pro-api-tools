@@ -1028,6 +1028,7 @@ INDEX_HTML = """
       const rect = logEl.getBoundingClientRect();
       const availableHeight = window.innerHeight - rect.top - 16;
       const targetHeight = Math.max(240, availableHeight);
+      const availableWidthPx = Math.max(360, window.innerWidth - rect.left - 16);
 
       logEl.style.height = `${targetHeight}px`;
       logEl.style.maxHeight = `${targetHeight}px`;
