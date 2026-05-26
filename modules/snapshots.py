@@ -128,12 +128,6 @@ async def export_snapshot_for_tenant(
     tm: TokenManager,
     tenant: Dict[str, Any],
 ) -> Optional[Path]:
-    """
-    Экспорт полного снапшота конфигурации для ОДНОГО тенанта.
-
-    В PTAF PRO используется глобальный эндпоинт /config/snapshot,
-    а конкретный тенант выбирается через JWT (TenantAuth).
-    """
     tenant_id = str(tenant.get("id"))
     if not tenant_id:
         logger.error(f"Tenant object has no 'id': {tenant}")
@@ -144,12 +138,11 @@ async def export_snapshot_for_tenant(
     logger.info(f"[tenant={tenant_id}] Exporting snapshot from {url}")
 
     auth = TenantAuth(tm, tenant_id=tenant_id)
-    r = await client.get(url, auth=auth)
-    if r.status_code != 200:
-        logger.error(
-            f"[tenant={tenant_id}] Snapshot export failed: "
-            f"{r.status_code} {r.text}"
-        )
+    try:
+        r = await client.get(url, auth=auth)
+        r.raise_for_status()
+    except Exception as e:
+        logger.error(f"[tenant={tenant_id}] Snapshot export failed: {e}")
         return None
 
     data = r.json()
@@ -162,16 +155,6 @@ async def export_snapshot_for_tenant(
 
 
 async def export_all_tenant_snapshots(tm: TokenManager) -> List[Path]:
-    """
-    Стадия инициализации:
-
-    1. Авторизация в API.
-    2. Получение списка всех доступных тенантов.
-    3. Экспорт полного снапшота каждого тенанта в отдельный JSON-файл
-       в директорию config.SNAPSHOTS_DIR.
-
-    Возвращает список созданных файлов.
-    """
     created_files: List[Path] = []
 
     removed = cleanup_old_snapshots()
@@ -182,14 +165,10 @@ async def export_all_tenant_snapshots(tm: TokenManager) -> List[Path]:
         verify=config.VERIFY_SSL,
         timeout=config.REQUEST_TIMEOUT,
     ) as client:
-        # 1. Проверяем, что можем авторизоваться
         token = await tm.ensure_base_token(client)
         if not token:
-            raise RuntimeError(
-                "Unable to obtain base access token (check credentials)"
-            )
+            raise RuntimeError("Unable to obtain base access token (check credentials)")
 
-        # 2. Тенанты
         tenants = await fetch_tenants(client, tm)
         if not tenants:
             logger.warning("No tenants returned by API")
@@ -197,7 +176,6 @@ async def export_all_tenant_snapshots(tm: TokenManager) -> List[Path]:
 
         logger.info(f"Exporting snapshots for {len(tenants)} tenants")
 
-        # 3. Экспорт по каждому тенанту
         for tenant in tenants:
             path = await export_snapshot_for_tenant(client, tm, tenant)
             if path:

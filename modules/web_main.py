@@ -244,16 +244,23 @@ async def api_snapshot_tenant(tenant_id: str):
         verify=config.VERIFY_SSL,
         timeout=config.REQUEST_TIMEOUT,
     ) as client:
-        path = await export_snapshot_for_tenant(
-            client,
-            token_manager,
-            tenant,
-        )
+        try:
+            path = await export_snapshot_for_tenant(
+                client,
+                token_manager,
+                tenant,
+            )
+        except Exception as e:
+            logger.error(f"Failed to export snapshot for tenant {tenant_id}: {e}")
+            return JSONResponse(
+                {"error": str(e), "file": None},
+                status_code=200,
+            )
 
     if not path:
         return JSONResponse(
-            {"error": "Snapshot export failed"},
-            status_code=500,
+            {"error": "Snapshot export failed", "file": None},
+            status_code=200,
         )
 
     return {
@@ -279,7 +286,14 @@ async def api_export_rules(tenant_id: str):
         verify=config.VERIFY_SSL,
         timeout=config.REQUEST_TIMEOUT,
     ) as client:
-        files = await export_rules_for_tenant(client, token_manager, tenant)
+        try:
+            files = await export_rules_for_tenant(client, token_manager, tenant)
+        except Exception as e:
+            logger.error(f"Failed to export rules for tenant {tenant_id}: {e}")
+            return JSONResponse(
+                {"error": str(e), "exported": 0, "files": []},
+                status_code=200,
+            )
 
     return {
         "exported": len(files),
@@ -300,7 +314,14 @@ async def api_export_actions(tenant_id: str):
         verify=config.VERIFY_SSL,
         timeout=config.REQUEST_TIMEOUT,
     ) as client:
-        files = await export_actions_for_tenant(client, token_manager, tenant)
+        try:
+            files = await export_actions_for_tenant(client, token_manager, tenant)
+        except Exception as e:
+            logger.error(f"Failed to export actions for tenant {tenant_id}: {e}")
+            return JSONResponse(
+                {"error": str(e), "exported": 0, "files": []},
+                status_code=200,   # не 500, чтобы UI не падал
+            )
 
     return {
         "exported": len(files),

@@ -52,8 +52,12 @@ async def export_rules_for_tenant(
     logger.info(f"[tenant={tenant_id}] Exporting rules from {url}")
 
     auth = TenantAuth(tm, tenant_id=tenant_id)
-    r = await client.get(url, auth=auth)
-    r.raise_for_status()
+    try:
+        r = await client.get(url, auth=auth)
+        r.raise_for_status()
+    except Exception as e:
+        logger.error(f"[tenant={tenant_id}] Failed to export rules: {e}")
+        return []
 
     items = _normalize_items(r.json())
     created: List[Path] = []
@@ -67,9 +71,7 @@ async def export_rules_for_tenant(
         )
         created.append(fname)
 
-    logger.success(
-        f"[tenant={tenant_id}] Exported {len(created)} rule objects to {subdir}"
-    )
+    logger.success(f"[tenant={tenant_id}] Exported {len(created)} rule objects to {subdir}")
     return created
 
 
@@ -85,8 +87,12 @@ async def export_actions_for_tenant(
     logger.info(f"[tenant={tenant_id}] Exporting actions from {url}")
 
     auth = TenantAuth(tm, tenant_id=tenant_id)
-    r = await client.get(url, auth=auth)
-    r.raise_for_status()
+    try:
+        r = await client.get(url, auth=auth)
+        r.raise_for_status()
+    except Exception as e:
+        logger.error(f"[tenant={tenant_id}] Failed to export actions: {e}")
+        return []
 
     items = _normalize_items(r.json())
     created: List[Path] = []
@@ -100,36 +106,11 @@ async def export_actions_for_tenant(
         )
         created.append(fname)
 
-    logger.success(
-        f"[tenant={tenant_id}] Exported {len(created)} action objects to {subdir}"
-    )
-    return created
-
-
-async def export_rules_for_all_tenants(tm: TokenManager) -> List[Path]:
-    """
-    Массовый экспорт правил для всех тенантов в config.RULES_DIR.
-    """
-    created: List[Path] = []
-    async with httpx.AsyncClient(
-        verify=config.VERIFY_SSL,
-        timeout=config.REQUEST_TIMEOUT,
-    ) as client:
-        tenants = await fetch_tenants(client, tm)
-        if not tenants:
-            logger.warning("No tenants returned by API (rules export)")
-            return []
-
-        for tenant in tenants:
-            created.extend(await export_rules_for_tenant(client, tm, tenant))
-
+    logger.success(f"[tenant={tenant_id}] Exported {len(created)} action objects to {subdir}")
     return created
 
 
 async def export_actions_for_all_tenants(tm: TokenManager) -> List[Path]:
-    """
-    Массовый экспорт actions для всех тенантов в config.ACTIONS_DIR.
-    """
     created: List[Path] = []
     async with httpx.AsyncClient(
         verify=config.VERIFY_SSL,
@@ -141,7 +122,26 @@ async def export_actions_for_all_tenants(tm: TokenManager) -> List[Path]:
             return []
 
         for tenant in tenants:
-            created.extend(await export_actions_for_tenant(client, tm, tenant))
+            files = await export_actions_for_tenant(client, tm, tenant)
+            created.extend(files)
+
+    return created
+
+
+async def export_rules_for_all_tenants(tm: TokenManager) -> List[Path]:
+    created: List[Path] = []
+    async with httpx.AsyncClient(
+        verify=config.VERIFY_SSL,
+        timeout=config.REQUEST_TIMEOUT,
+    ) as client:
+        tenants = await fetch_tenants(client, tm)
+        if not tenants:
+            logger.warning("No tenants returned by API (rules export)")
+            return []
+
+        for tenant in tenants:
+            files = await export_rules_for_tenant(client, tm, tenant)
+            created.extend(files)
 
     return created
 
