@@ -893,7 +893,7 @@ INDEX_HTML = """
     <section class="column-panel">
       <div class="panel-header">
         <h2 id="from-title-en">From: what we export/import</h2>
-        <h2 id="from-title-ru" class="hidden">Откуда и что берём</h2>
+        <h2 id="from-title-ru" class="hidden">Источник</h2>
         <div class="chip-row">
           <span class="chip">All tenant</span>
           <span class="chip">Tenant</span>
@@ -965,7 +965,7 @@ INDEX_HTML = """
     <section class="column-panel">
       <div class="panel-header">
         <h2 id="to-title-en">To: where we deliver</h2>
-        <h2 id="to-title-ru" class="hidden">Куда отправляем</h2>
+        <h2 id="to-title-ru" class="hidden">Получатель</h2>
         <div class="chip-row">
           <span class="chip">.json file</span>
           <span class="chip">Log</span>
