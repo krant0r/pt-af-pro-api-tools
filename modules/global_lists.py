@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 from typing import Any, Dict, List
+from urllib.parse import unquote
 
 import httpx
 from loguru import logger
@@ -11,6 +13,28 @@ from .auth import TokenManager, TenantAuth
 from .config import config
 from .tenants import fetch_tenants
 from .rules_actions import _tenant_subdir, _normalize_items
+from .snapshots import _slugify   # <-- добавлен импорт
+
+
+def _extract_filename_from_cd(content_disposition: str) -> str | None:
+    """
+    Извлекает имя файла из заголовка Content-Disposition.
+    Поддерживает формы:
+      - filename*=UTF-8''encoded_name.txt
+      - filename="quoted name.txt"
+      - filename=plainname.txt
+    """
+    # RFC 5987: filename*=UTF-8''value
+    match = re.search(r"filename\*=UTF-8''([^;]+)", content_disposition)
+    if match:
+        return unquote(match.group(1))
+    # Обычный filename в кавычках или без
+    match = re.search(r'filename="([^"]+)"', content_disposition)
+    if not match:
+        match = re.search(r"filename=([^;]+)", content_disposition)
+    if match:
+        return match.group(1).strip('"')
+    return None
 
 
 async def export_global_lists_for_tenant(
@@ -37,22 +61,52 @@ async def export_global_lists_for_tenant(
         logger.error(f"[tenant={tenant_id}] Failed to export global lists: {e}")
         return []
 
-    data = r.json()
-    items = _normalize_items(data)  # поддержка {"items": [...]} или прямого списка
+    items = _normalize_items(r.json())
     created: List[Path] = []
 
     for gl in items:
         gl_id = gl.get("id") or gl.get("name") or "global_list"
-        # Используем slugify для безопасного имени файла
-        from .snapshots import _slugify
-        fname = subdir / f"{_slugify(str(gl_id))}.globallist.json"
-        fname.write_text(
+
+        # 1. Сохраняем JSON-конфигурацию списка
+        fname_json = subdir / f"{_slugify(str(gl_id))}.globallist.json"
+        fname_json.write_text(
             json.dumps(gl, ensure_ascii=False, indent=2),
             encoding="utf-8",
         )
-        created.append(fname)
+        created.append(fname_json)
 
-    logger.success(f"[tenant={tenant_id}] Exported {len(created)} global lists to {subdir}")
+        # 2. Запрашиваем и сохраняем содержимое файла списка
+        base_endpoint = config.GLOBAL_LISTS_ENDPOINT.rstrip('/')
+        file_url = f"{config.AF_URL}{base_endpoint}/{gl_id}/file"
+        logger.debug(f"[tenant={tenant_id}] Fetching global list file from {file_url}")
+        # Используем тот же клиент, повторно создавать auth не нужно
+        try:
+            resp_file = await client.get(file_url, auth=auth)
+            resp_file.raise_for_status()
+        except Exception as e:
+            logger.error(f"[tenant={tenant_id}] Failed to fetch file for list {gl_id}: {e}")
+            continue
+
+        # Определяем имя файла для сохранения
+        cd_header = resp_file.headers.get("content-disposition")
+        filename = None
+        if cd_header:
+            filename = _extract_filename_from_cd(cd_header)
+        if not filename:
+            # Запасной вариант: slug_id.txt
+            filename = f"{_slugify(str(gl_id))}.txt"
+        # Убираем возможные разделители путей
+        filename = filename.replace("/", "_")
+        file_path = subdir / filename
+
+        # Сохраняем содержимое (текстовое, но пишем байты как есть)
+        file_path.write_bytes(resp_file.content)
+        logger.debug(f"[tenant={tenant_id}] Saved global list file to {file_path}")
+        created.append(file_path)
+
+        logger.success(f"[tenant={tenant_id}] Exported global list {gl_id} (config + file)")
+
+    logger.success(f"[tenant={tenant_id}] Exported {len(created)} objects (configs + files) to {subdir}")
     return created
 
 
