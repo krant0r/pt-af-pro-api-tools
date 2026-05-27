@@ -129,3 +129,37 @@ async def export_global_lists_for_all_tenants(tm: TokenManager) -> List[Path]:
             created.extend(files)
 
     return created
+
+
+async def fetch_global_lists(
+    client: httpx.AsyncClient,
+    tm: TokenManager,
+    tenant_id: str,
+) -> List[Dict[str, Any]]:
+    """Получить список глобальных списков (без сохранения)."""
+    url = f"{config.AF_URL}{config.GLOBAL_LISTS_ENDPOINT}"
+    auth = TenantAuth(tm, tenant_id=tenant_id)
+    r = await client.get(url, auth=auth)
+    r.raise_for_status()
+    return _normalize_items(r.json())
+
+
+async def add_items_to_global_list(
+    client: httpx.AsyncClient,
+    tm: TokenManager,
+    tenant_id: str,
+    list_id: str,
+    items: List[str],
+    ttl: int = 1440,
+) -> Dict[str, Any]:
+    """Добавить IP-адреса (items) в глобальный динамический список."""
+    url = f"{config.AF_URL}{config.GLOBAL_LISTS_ENDPOINT}/add_items"
+    auth = TenantAuth(tm, tenant_id=tenant_id)
+    payload = {
+        "global_lists": [list_id],
+        "items": items,
+        "ttl": ttl,
+    }
+    r = await client.post(url, json=payload, auth=auth)
+    r.raise_for_status()
+    return r.json()

@@ -9,7 +9,7 @@ from fastapi import FastAPI, File, UploadFile, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 from loguru import logger
 
-from .auth import TokenManager
+from .auth import TokenManager, TenantAuth
 from .config import config
 from .rules_actions import (
     export_actions_for_tenant,
@@ -18,6 +18,7 @@ from .rules_actions import (
     import_rule_payload,
     list_local_exports,
     load_local_payload,
+    _normalize_items,
 )
 
 from .snapshots import (
@@ -361,10 +362,86 @@ async def api_export_global_lists(tenant_id: str):
         "files": [str(p) for p in files],
     }
 
+
 @app.post("/api/global_lists/export/all")
 async def api_export_global_lists_all():
     files = await export_global_lists_for_all_tenants(token_manager)
     return {"exported": len(files), "files": [str(p) for p in files]}
+
+
+# ---------------------------------------------------------------------------
+# API: добавление IP в глобальный динамический список
+# ---------------------------------------------------------------------------
+async def _fetch_global_lists(
+    client: httpx.AsyncClient,
+    tm: TokenManager,
+    tenant_id: str,
+):
+    url = f"{config.AF_URL}{config.GLOBAL_LISTS_ENDPOINT}"
+    auth = TenantAuth(tm, tenant_id=tenant_id)
+    r = await client.get(url, auth=auth)
+    r.raise_for_status()
+    return _normalize_items(r.json())
+
+
+async def _add_items_to_global_list(
+    client: httpx.AsyncClient,
+    tm: TokenManager,
+    tenant_id: str,
+    list_id: str,
+    items: list,
+    ttl: int = 1440,
+):
+    url = f"{config.AF_URL}{config.GLOBAL_LISTS_ENDPOINT}/add_items"
+    auth = TenantAuth(tm, tenant_id=tenant_id)
+    payload = {"global_lists": [list_id], "items": items, "ttl": ttl}
+    r = await client.post(url, json=payload, auth=auth)
+    r.raise_for_status()
+    return r.json()
+
+
+@app.get("/api/tenants/{tenant_id}/global_lists")
+async def api_get_global_lists(tenant_id: str):
+    tenant = await _find_tenant(tenant_id)
+    if not tenant:
+        return JSONResponse({"error": f"Tenant {tenant_id} not found"}, status_code=404)
+    async with httpx.AsyncClient(verify=config.VERIFY_SSL, timeout=config.REQUEST_TIMEOUT) as client:
+        try:
+            lists = await _fetch_global_lists(client, token_manager, tenant_id)
+        except Exception as e:
+            logger.error(f"Failed to fetch global lists for tenant {tenant_id}: {e}")
+            return JSONResponse({"error": str(e)}, status_code=500)
+    return lists
+
+
+@app.post("/api/global_lists/add_item")
+async def api_add_item_to_global_list(request: Request):
+    body = await request.json()
+    tenant_id = body.get("tenant_id")
+    list_id = body.get("list_id")
+    items = body.get("items", [])
+    ttl = body.get("ttl", 1440)
+    if not tenant_id or not list_id or not items:
+        return JSONResponse({"error": "tenant_id, list_id and items are required"}, status_code=400)
+    if ttl < 1 or ttl > 10080:
+        return JSONResponse({"error": "ttl must be between 1 and 10080 minutes"}, status_code=400)
+
+    async with httpx.AsyncClient(verify=config.VERIFY_SSL, timeout=config.REQUEST_TIMEOUT) as client:
+        if tenant_id == "__all__":
+            tenants = await _fetch_tenants()
+            results = []
+            for t in tenants:
+                tid = str(t["id"])
+                try:
+                    res = await _add_items_to_global_list(client, token_manager, tid, list_id, items, ttl)
+                    results.append({"tenant_id": tid, "status": res.get("status")})
+                except Exception as e:
+                    results.append({"tenant_id": tid, "error": str(e)})
+            return {"results": results}
+        else:
+            res = await _add_items_to_global_list(client, token_manager, tenant_id, list_id, items, ttl)
+            return res
+
 
 @app.post("/api/tenants/{tenant_id}/rules/import")
 async def api_import_rule(
@@ -987,6 +1064,47 @@ INDEX_HTML = """
     </section>
   </div>
 
+  <!-- Новая панель для добавления IP в глобальный список -->
+  <div class="transfer-grid" style="margin-top: 1rem;">
+    <section class="column-panel">
+      <div class="panel-header">
+        <h2 id="addip-title-en">Add IP to global list (Dynamic)</h2>
+        <h2 id="addip-title-ru" class="hidden">Добавить IP в глобальный список (Dynamic)</h2>
+      </div>
+      <div class="settings-panel slim">
+        <div class="settings-row">
+          <label>
+            <span id="addip-tenant-label-en">Tenant</span>
+            <span id="addip-tenant-label-ru" class="hidden">Тенант</span>
+          </label>
+          <select id="addip-tenant"></select>
+        </div>
+        <div class="settings-row">
+          <label>
+            <span id="addip-list-label-en">Global list</span>
+            <span id="addip-list-label-ru" class="hidden">Глобальный список</span>
+          </label>
+          <select id="addip-list"></select>
+        </div>
+        <div class="settings-row">
+          <label>
+            <span id="addip-ip-label-en">IP address(es)</span>
+            <span id="addip-ip-label-ru" class="hidden">IP адрес(а)</span>
+          </label>
+          <input type="text" id="addip-ips" placeholder="192.168.1.1, 10.0.0.1" />
+        </div>
+        <div class="settings-row">
+          <label>
+            <span id="addip-ttl-label-en">TTL (minutes, max 10080)</span>
+            <span id="addip-ttl-label-ru" class="hidden">TTL (минуты, макс 10080)</span>
+          </label>
+          <input type="number" id="addip-ttl" value="1440" min="1" max="10080" />
+        </div>
+        <button onclick="addIpToGlobalList()">➕ Add IP</button>
+      </div>
+    </section>
+  </div>
+
 </div>
 
 </div>
@@ -1043,6 +1161,11 @@ INDEX_HTML = """
         ["snapshot-hosts-en", "snapshot-hosts-ru"],
         ["snapshot-tenant-hosts-en", "snapshot-tenant-hosts-ru"],
         ["a4-en", "a4-ru"],
+        ["addip-title-en", "addip-title-ru"],
+        ["addip-tenant-label-en", "addip-tenant-label-ru"],
+        ["addip-list-label-en", "addip-list-label-ru"],
+        ["addip-ip-label-en", "addip-ip-label-ru"],
+        ["addip-ttl-label-en", "addip-ttl-label-ru"],
       ];
       ids.forEach(([en, ru]) => {
         document.getElementById(en).classList.toggle("hidden", lang !== "en");
@@ -1059,6 +1182,7 @@ INDEX_HTML = """
 
       populateTenantSelect("tenant-select", true);
       populateTenantSelect("import-tenant-select", true);
+      populateTenantSelect("addip-tenant", true);
 
       setTheme(currentTheme);
     }
@@ -1162,7 +1286,7 @@ INDEX_HTML = """
     function tenantOptionLabel(t) {
       const name = t.name || t.displayName || t.id;
       const snapshotInfo = formatSnapshotInfo(t.last_snapshot_at);
-      return `${name} — ${snapshotInfo}`;
+      return `${snapshotInfo} — ${name}`;
     }
 
     function populateTenantSelect(selectId, includeAll = false) {
@@ -1195,6 +1319,11 @@ INDEX_HTML = """
 
       if (!select.value && select.options.length) {
         select.selectedIndex = 0;
+      }
+
+      // для панели добавления IP – при смене тенанта подгружаем списки
+      if (selectId === "addip-tenant") {
+        loadGlobalListsForAddIp(select.value);
       }
     }
 
@@ -1248,6 +1377,7 @@ INDEX_HTML = """
       tenantsCache = data;
       populateTenantSelect("tenant-select", true);
       populateTenantSelect("import-tenant-select", true);
+      populateTenantSelect("addip-tenant", true);
       log("Loaded " + data.length + " tenants");
     }
 
@@ -1438,7 +1568,6 @@ INDEX_HTML = """
         const data = await resp.json();
         log("Global lists export result: " + JSON.stringify(data));
       }
-      // Если хочешь, чтобы после экспорта обновлялся список локальных файлов (для импорта) – раскомментируй:
       await loadLocalExports();
     }
 
@@ -1594,6 +1723,48 @@ INDEX_HTML = """
         const data = await resp.json();
         log(`Import result for ${tenantId}: ` + JSON.stringify(data));
       }
+    }
+
+    // ---- добавление IP в глобальный список ----
+    async function loadGlobalListsForAddIp(tenantId) {
+      if (!tenantId || tenantId === "__all__") {
+        document.getElementById("addip-list").innerHTML = '<option value="">— select tenant first —</option>';
+        return;
+      }
+      const resp = await fetch(`/api/tenants/${encodeURIComponent(tenantId)}/global_lists`);
+      if (!resp.ok) {
+        log("Failed to load global lists: " + resp.statusText);
+        return;
+      }
+      const lists = await resp.json();
+      const select = document.getElementById("addip-list");
+      select.innerHTML = '<option value="">-- select list --</option>';
+      lists.forEach(lst => {
+        const opt = document.createElement("option");
+        opt.value = lst.id;
+        opt.textContent = lst.name || lst.id;
+        select.appendChild(opt);
+      });
+    }
+
+    async function addIpToGlobalList() {
+      const tenantSelect = document.getElementById("addip-tenant");
+      const tenantId = tenantSelect.value;
+      const listId = document.getElementById("addip-list").value;
+      const ipsRaw = document.getElementById("addip-ips").value;
+      const ttl = parseInt(document.getElementById("addip-ttl").value, 10);
+      if (!tenantId || !listId || !ipsRaw) {
+        log("Please select tenant, list and enter IP(s)");
+        return;
+      }
+      const items = ipsRaw.split(/[ ,;]+/).filter(s => s.trim().length > 0);
+      const resp = await fetch("/api/global_lists/add_item", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tenant_id: tenantId, list_id: listId, items, ttl }),
+      });
+      const data = await resp.json();
+      log("Add IP result: " + JSON.stringify(data));
     }
 
     async function initUi() {

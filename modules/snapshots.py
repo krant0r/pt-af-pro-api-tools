@@ -67,26 +67,23 @@ def cleanup_old_snapshots() -> int:
 
 
 def _tenant_id_from_snapshot_path(path: Path) -> Optional[str]:
-    """
-    Extract tenant ID from snapshot filename.
-
-    Filenames follow pattern: ``{ts}_{name}_{tenant_id}.snapshot.json``.
-    """
-
-    parts = path.stem.rsplit("_", 1)
+    # Убираем расширение .snapshot.json полностью
+    name = path.name
+    if not name.endswith('.snapshot.json'):
+        return None
+    base = name[:-len('.snapshot.json')]  # отрезаем .snapshot.json
+    parts = base.rsplit("_", 1)
     if len(parts) < 2:
         return None
     return parts[-1]
 
 
 def _timestamp_from_snapshot_path(path: Path) -> Optional[datetime]:
-    """
-    Parse timestamp prefix from snapshot filename.
-
-    Expected prefix format: ``YYYYMMDDTHHMMSSZ`` before the first underscore.
-    """
-
-    prefix = path.name.split("_", 1)[0]
+    name = path.name
+    if not name.endswith('.snapshot.json'):
+        return None
+    base = name[:-len('.snapshot.json')]
+    prefix = base.split("_", 1)[0]
     try:
         return datetime.strptime(prefix, "%Y%m%dT%H%M%SZ")
     except ValueError:
@@ -104,6 +101,7 @@ def latest_snapshot_per_tenant() -> Dict[str, str]:
 
     for path in config.SNAPSHOTS_DIR.glob("*.snapshot.json"):
         tenant_id = _tenant_id_from_snapshot_path(path)
+        
         if not tenant_id:
             continue
 
