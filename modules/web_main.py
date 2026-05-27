@@ -28,6 +28,11 @@ from .snapshots import (
 )
 from .tenants import fetch_tenants
 
+from .global_lists import (
+    export_global_lists_for_tenant,
+    export_global_lists_for_all_tenants,
+)
+
 app = FastAPI(
     title="PTAF PRO Web API Tools",
     description=(
@@ -328,6 +333,38 @@ async def api_export_actions(tenant_id: str):
         "files": [str(p) for p in files],
     }
 
+
+@app.post("/api/tenants/{tenant_id}/global_lists/export")
+async def api_export_global_lists(tenant_id: str):
+    tenant = await _find_tenant(tenant_id)
+    if not tenant:
+        return JSONResponse(
+            {"error": f"Tenant {tenant_id} not found"},
+            status_code=404,
+        )
+
+    async with httpx.AsyncClient(
+        verify=config.VERIFY_SSL,
+        timeout=config.REQUEST_TIMEOUT,
+    ) as client:
+        try:
+            files = await export_global_lists_for_tenant(client, token_manager, tenant)
+        except Exception as e:
+            logger.error(f"Failed to export global lists for tenant {tenant_id}: {e}")
+            return JSONResponse(
+                {"error": str(e), "exported": 0, "files": []},
+                status_code=200,
+            )
+
+    return {
+        "exported": len(files),
+        "files": [str(p) for p in files],
+    }
+
+@app.post("/api/global_lists/export/all")
+async def api_export_global_lists_all():
+    files = await export_global_lists_for_all_tenants(token_manager)
+    return {"exported": len(files), "files": [str(p) for p in files]}
 
 @app.post("/api/tenants/{tenant_id}/rules/import")
 async def api_import_rule(
@@ -839,6 +876,11 @@ INDEX_HTML = """
           <span id="a3-en">Export actions</span>
           <span id="a3-ru" class="hidden">Экспорт действий</span>
           <button onclick="runActionsExport()">Run</button>
+
+          <code>4</code> –
+          <span id="a4-en">Export global lists</span>
+          <span id="a4-ru" class="hidden">Экспорт глобальных списков</span>
+          <button onclick="runGlobalListsExport()">Run</button>
         </div>
       </div>
     </section>
@@ -1000,6 +1042,7 @@ INDEX_HTML = """
         ["snapshot-apps-en", "snapshot-apps-ru"],
         ["snapshot-hosts-en", "snapshot-hosts-ru"],
         ["snapshot-tenant-hosts-en", "snapshot-tenant-hosts-ru"],
+        ["a4-en", "a4-ru"],
       ];
       ids.forEach(([en, ru]) => {
         document.getElementById(en).classList.toggle("hidden", lang !== "en");
@@ -1377,6 +1420,25 @@ INDEX_HTML = """
         const data = await resp.json();
         log("Actions export result: " + JSON.stringify(data));
       }
+      await loadLocalExports();
+    }
+
+    async function runGlobalListsExport() {
+      const tenantIds = getSelectedExportTenantIds();
+      if (!tenantIds.length) {
+        log("No tenant selected");
+        return;
+      }
+      for (const tenantId of tenantIds) {
+        log("Running action 4 (export global lists for tenant " + tenantId + ")");
+        const resp = await fetch(
+          "/api/tenants/" + encodeURIComponent(tenantId) + "/global_lists/export",
+          { method: "POST" }
+        );
+        const data = await resp.json();
+        log("Global lists export result: " + JSON.stringify(data));
+      }
+      // Если хочешь, чтобы после экспорта обновлялся список локальных файлов (для импорта) – раскомментируй:
       await loadLocalExports();
     }
 

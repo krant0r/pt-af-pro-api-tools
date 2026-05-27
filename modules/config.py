@@ -128,23 +128,28 @@ class Config:
         self.SNAPSHOT_ENDPOINT: str = ""
         self.RULES_ENDPOINT: str = ""
         self.ACTIONS_ENDPOINT: str = ""
+        self.GLOBAL_LISTS_ENDPOINT: str = ""
         self.SNAPSHOT_RETENTION_DAYS: Optional[int] = None
 
         self.SNAPSHOTS_DIR: Path = Path(
-            os.getenv("SNAPSHOTS_DIR", str(self.BASE_DIR / "snapshots"))
+            os.getenv("SNAPSHOTS_DIR", str(self.DATA_DIR / "snapshots"))
         ).resolve()
         self.RULES_DIR: Path = Path(
-            os.getenv("RULES_DIR", str(self.BASE_DIR / "rules"))
+            os.getenv("RULES_DIR", str(self.DATA_DIR / "rules"))
         ).resolve()
         self.ACTIONS_DIR: Path = Path(
-            os.getenv("ACTIONS_DIR", str(self.BASE_DIR / "actions"))
+            os.getenv("ACTIONS_DIR", str(self.DATA_DIR / "actions"))
         ).resolve()
-
+        self.GLOBAL_LISTS_DIR: Path = Path(
+            os.getenv("GLOBAL_LISTS_DIR", str(self.DATA_DIR / "global_lists"))
+        ).resolve()
+        
         self.reload_from_sources()
 
         self.SNAPSHOTS_DIR.mkdir(parents=True, exist_ok=True)
         self.RULES_DIR.mkdir(parents=True, exist_ok=True)
         self.ACTIONS_DIR.mkdir(parents=True, exist_ok=True)
+        self.GLOBAL_LISTS_DIR.mkdir(parents=True, exist_ok=True)
 
     # ---------- internal helpers ----------
 
@@ -274,7 +279,10 @@ class Config:
         self.ACTIONS_ENDPOINT = self._settings_or_env(
             "ACTIONS_ENDPOINT", "ACTIONS_ENDPOINT", f"{self.API_PATH}/config/actions"
         )
-
+        self.GLOBAL_LISTS_ENDPOINT = self._settings_or_env(
+            "GLOBAL_LISTS_ENDPOINT", "GLOBAL_LISTS_ENDPOINT", f"{self.API_PATH}/config/global_lists"
+        )
+        
         retention_value = self._resolve_retention_days()
         self.SNAPSHOT_RETENTION_DAYS = retention_value
 
