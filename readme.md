@@ -95,7 +95,9 @@ pip install pyinstaller
 pyinstaller ptaf-tools.spec --clean
 ```
 
-Executable will be created in `dist/` directory.
+Executables will be created in `dist/` directory:
+- `ptaf-tools.exe` — CLI режим (меню с выбором действий)
+- `ptaf-web.exe` — веб-сервер с UI (откроется в браузере автоматически)
 
 ### GitHub Actions
 

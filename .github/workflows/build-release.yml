@@ -20,7 +20,7 @@ jobs:
     - name: Set up Python
       uses: actions/setup-python@v5
       with:
-        python-version: '3.11'
+        python-version: '3.14.6'
         
     - name: Install dependencies
       run: |
@@ -36,7 +36,9 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: ptaf-tools-windows
-        path: dist/ptaf-tools.exe
+        path: |
+          dist/ptaf-tools.exe
+          dist/ptaf-web.exe
         if-no-files-found: error
 
   build-linux:
@@ -65,7 +67,9 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: ptaf-tools-linux
-        path: dist/ptaf-tools
+        path: |
+          dist/ptaf-tools
+          dist/ptaf-web
         if-no-files-found: error
 
   create-release:
@@ -88,16 +92,16 @@ jobs:
     - name: Prepare release files
       run: |
         cd ./release
-        zip -r ptaf-tools-windows.exe.zip ptaf-tools.exe
-        zip -r ptaf-tools-linux ptaf-tools
-        rm ptaf-tools.exe ptaf-tools
+        zip -r ptaf-tools-windows.zip ptaf-tools.exe ptaf-web.exe
+        zip -r ptaf-tools-linux.zip ptaf-tools ptaf-web
+        rm ptaf-tools.exe ptaf-web.exe ptaf-tools ptaf-web
         
     - name: Create Release
       uses: softprops/action-gh-release@v2
       with:
         files: |
-          ./release/ptaf-tools-windows.exe.zip
-          ./release/ptaf-tools-linux
+          ./release/ptaf-tools-windows.zip
+          ./release/ptaf-tools-linux.zip
         generate_release_notes: true
         draft: false
         prerelease: false
