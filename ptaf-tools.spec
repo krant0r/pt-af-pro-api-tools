@@ -8,7 +8,6 @@ a = Analysis(
     binaries=[],
     datas=[
         ('modules', 'modules'),
-        ('.env', '.'),
     ],
     hiddenimports=[
         'httpx',
