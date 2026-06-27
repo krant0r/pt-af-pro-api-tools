@@ -116,4 +116,5 @@ def settings_payload() -> Dict[str, Any]:
         "verify_ssl": config.VERIFY_SSL,
         "ldap_auth": config.LDAP_AUTH,
         "snapshot_retention_days": config.SNAPSHOT_RETENTION_DAYS,
+        "has_auth": bool(config.API_LOGIN or config.API_TOKEN),
     }

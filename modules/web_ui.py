@@ -340,6 +340,48 @@ INDEX_HTML = """<!DOCTYPE html>
       visibility: hidden;
       transition: visibility 0.3s, opacity 0.3s;
     }
+
+    /* Auth warning banner */
+    .auth-warning-banner {
+      background: #f39c12;
+      color: #000;
+      padding: 0.75rem 1rem;
+      border-radius: 8px;
+      margin-bottom: 1rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+      animation: slideIn 0.3s ease-out;
+    }
+    .auth-warning-banner[data-theme="dark"] {
+      background: #d68910;
+    }
+    .auth-warning-content {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      flex-wrap: wrap;
+      width: 100%;
+    }
+    .auth-warning-icon {
+      font-size: 1.25rem;
+    }
+    .auth-warning-btn {
+      background: #000;
+      color: #fff;
+      border: none;
+      padding: 0.4rem 0.8rem;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 0.9rem;
+      white-space: nowrap;
+      transition: opacity 0.2s;
+    }
+    .auth-warning-btn:hover {
+      opacity: 0.8;
+    }
   </style>
 </head>
 <body data-theme="light">
@@ -356,6 +398,16 @@ INDEX_HTML = """<!DOCTYPE html>
       <div class="right-controls">
         <button class="icon-btn" id="theme-toggle" onclick="toggleTheme()">🌓</button>
         <button class="lang-toggle-btn" id="lang-toggle" onclick="toggleLanguage()">🇷🇺</button>
+      </div>
+    </div>
+
+    <!-- Auth warning banner -->
+    <div id="auth-warning-banner" class="auth-warning-banner hidden" style="display: none;">
+      <div class="auth-warning-content">
+        <span class="auth-warning-icon">⚠️</span>
+        <span id="auth-warning-text-en">No login/password configured. Please set up authentication in Settings.</span>
+        <span id="auth-warning-text-ru" class="hidden">Нет логина/пароля. Настройте авторизацию в Settings.</span>
+        <button class="auth-warning-btn" onclick="switchTab('settings')">Settings</button>
       </div>
     </div>
 
@@ -968,7 +1020,7 @@ INDEX_HTML = """<!DOCTYPE html>
         ["backup-btn-en", "backup-btn-ru"],
         ["permanent-ip-title-en", "permanent-ip-title-ru"],
         // Policy Manager tab
-        ["policy-title-en", "policy-title-ru"],
+        ["policy-title-en", "policy-ru"],
         ["policy-tenant-label-en", "policy-tenant-label-ru"],
         ["policy-tenant-hint-en", "policy-tenant-hint-ru"],
         ["rule-mod-title-en", "rule-mod-title-ru"],
@@ -977,6 +1029,8 @@ INDEX_HTML = """<!DOCTYPE html>
         ["whitelist-name-label-en", "whitelist-name-label-ru"],
         ["whitelist-name-hint-en", "whitelist-name-hint-ru"],
         ["policy-result-placeholder-en", "policy-result-placeholder-ru"],
+        // Auth warning banner
+        ["auth-warning-text-en", "auth-warning-text-ru"],
       ];
       ids.forEach(([en, ru]) => {
         const enEl = document.getElementById(en);
@@ -1086,6 +1140,16 @@ INDEX_HTML = """<!DOCTYPE html>
       document.getElementById("setting-verify-ssl").checked = data.verify_ssl !== false;
       document.getElementById("setting-ldap-auth").checked = !!data.ldap_auth;
       document.getElementById("setting-snapshot-retention").value = data.snapshot_retention_days ?? 30;
+
+      // Check if auth is configured
+      const hasAuth = data.has_auth === true;
+      const banner = document.getElementById("auth-warning-banner");
+      if (!hasAuth) {
+        banner.style.display = "flex";
+        log("⚠️ No authentication configured - showing warning banner");
+      } else {
+        banner.style.display = "none";
+      }
 
       setLang(currentLang);
       setTheme(currentTheme);
@@ -2747,6 +2811,8 @@ INDEX_HTML = """<!DOCTYPE html>
         hideLoading();
       }
     }
+
+    window.switchTab = switchTab;
 
     window.addEventListener("load", adjustLogSize);
     initUi().catch(e => log("Error: " + e));
