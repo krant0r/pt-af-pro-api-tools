@@ -70,7 +70,7 @@ async def run_cli_mode(args: argparse.Namespace) -> None:
 
 
 def main() -> None:
-    from .modules.version import __version__
+    from modules.version import __version__
     
     parser = argparse.ArgumentParser(
         description="PTAF PRO API Tools - CLI and Web UI"
