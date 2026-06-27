@@ -5,6 +5,11 @@ on:
     tags:
       - 'v*'
   workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version (e.g., v0.1.0)'
+        required: true
+        default: 'v0.1.0'
 
 permissions:
   contents: write
@@ -36,9 +41,7 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: ptaf-tools-windows
-        path: |
-          dist/ptaf-tools.exe
-          dist/ptaf-web.exe
+        path: dist/ptaf-tools.exe
         if-no-files-found: error
 
   build-linux:
@@ -67,9 +70,7 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: ptaf-tools-linux
-        path: |
-          dist/ptaf-tools
-          dist/ptaf-web
+        path: dist/ptaf-tools
         if-no-files-found: error
 
   create-release:
@@ -92,13 +93,23 @@ jobs:
     - name: Prepare release files
       run: |
         cd ./release
-        zip -r ptaf-tools-windows.zip ptaf-tools.exe ptaf-web.exe
-        zip -r ptaf-tools-linux.zip ptaf-tools ptaf-web
-        rm ptaf-tools.exe ptaf-web.exe ptaf-tools ptaf-web
+        zip -r ptaf-tools-windows.zip ptaf-tools.exe
+        zip -r ptaf-tools-linux.zip ptaf-tools
+        rm ptaf-tools.exe ptaf-tools
+        
+    - name: Determine version
+      id: version
+      run: |
+        if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+          echo "version=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
+        else
+          echo "version=${{ github.ref_name }}" >> $GITHUB_OUTPUT
+        fi
         
     - name: Create Release
       uses: softprops/action-gh-release@v2
       with:
+        tag_name: ${{ steps.version.outputs.version }}
         files: |
           ./release/ptaf-tools-windows.zip
           ./release/ptaf-tools-linux.zip
