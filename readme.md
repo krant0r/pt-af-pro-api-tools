@@ -82,7 +82,35 @@ PTAF_ACTION_SEQUENCE=1,2 python run_sequence.py
 # через параметр
 python run_sequence.py --actions 1,2,3
 
+# или через новый entry point
+python main.py --actions 1,2,3
 ```
+
+## Building executable
+
+### Local build
+
+```bash
+pip install pyinstaller
+pyinstaller ptaf-tools.spec --clean
+```
+
+Executable will be created in `dist/` directory.
+
+### GitHub Actions
+
+Push a tag starting with `v` (e.g., `v0.3.0`) to trigger automated build and release:
+
+```bash
+git tag v0.3.0
+git push origin v0.3.0
+```
+
+GitHub Actions will:
+1. Build executables for Windows (win64) and Linux
+2. Create a new release with attached artifacts:
+   - `ptaf-tools-windows.exe.zip`
+   - `ptaf-tools-linux`
 
 ## todo
 - скачивание в json user rule (not found при скачивании)

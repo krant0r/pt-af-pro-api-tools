@@ -92,10 +92,26 @@ def _read_secret(var_name: str, file_var_name: str) -> str:
     return (os.getenv(var_name) or "").strip()
 
 
+def _get_base_dir() -> Path:
+    """
+    Get base directory that works for both source code and PyInstaller executable.
+    For executables, uses the directory containing the .exe file.
+    For source code, uses the parent of the modules directory.
+    """
+    import sys
+    
+    if getattr(sys, 'frozen', False):
+        # Running as compiled executable
+        return Path(sys.executable).parent
+    else:
+        # Running as script
+        return Path(__file__).resolve().parent.parent
+
+
 class Config:
     def __init__(self) -> None:
         # ---------- Базовые пути ----------
-        self.BASE_DIR: Path = Path(__file__).resolve().parent.parent
+        self.BASE_DIR: Path = _get_base_dir()
         self.DATA_DIR: Path = self.BASE_DIR / "data"
         self.SETTINGS_FILE: Path = self.DATA_DIR / "settings.json"
 
