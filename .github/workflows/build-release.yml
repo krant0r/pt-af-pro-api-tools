@@ -26,7 +26,7 @@ jobs:
         $version = "${{ github.ref_name }}".TrimStart('v')
         Write-Host "Updating version to: $version"
         @"
-        `"""Version information - auto-generated during build.`""
+        `"""Version information - auto-generated during build.`"""
         __version__ = `"$version`"
         "@ | Out-File -FilePath "modules\version.py" -Encoding utf8
       shell: pwsh
