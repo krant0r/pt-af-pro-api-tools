@@ -595,11 +595,6 @@ INDEX_HTML = """<!DOCTYPE html>
           <div class="panel-header">
             <h2 id="ip-title-en">🌐 IP Management (Add/Remove/Check)</h2>
             <h2 id="ip-title-ru" class="hidden">🌐 Управление IP (Добавить/Удалить/Проверить)</h2>
-            <div class="chip-row">
-              <span class="chip">Add IP</span>
-              <span class="chip">Remove IP</span>
-              <span class="chip">Check IP</span>
-            </div>
           </div>
           <div class="settings-panel slim">
             <!-- Result display area (moved to top) -->
@@ -737,10 +732,6 @@ INDEX_HTML = """<!DOCTYPE html>
           <div class="panel-header">
             <h2 id="policy-title-en">🔒 Policy Manager (Batch Edit)</h2>
             <h2 id="policy-title-ru" class="hidden">🔒 Менеджер политик (Массовое редактирование)</h2>
-            <div class="chip-row">
-              <span class="chip">Add white_list exception</span>
-              <span class="chip">All tenants or selected</span>
-            </div>
           </div>
           <div class="settings-panel slim">
             <!-- Result display area -->
