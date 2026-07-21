@@ -1227,7 +1227,7 @@ async def api_get_permanent_ips(request: Request):
     async with httpx.AsyncClient(verify=config.VERIFY_SSL, timeout=config.REQUEST_TIMEOUT) as client:
         # Для всех тенантов - используем Aggregation blacklist
         if tenant_id == "__all__":
-            tenants_with_lists = await _get_tenants_with_global_lists(client, "Aggregation blacklist")
+            tenants_with_lists = await _get_tenants_with_global_lists(client, token_manager, "Aggregation blacklist")
             results = []
             
             for t in tenants_with_lists:
@@ -1337,7 +1337,7 @@ async def api_set_permanent_ips_7_days(request: Request):
     async with httpx.AsyncClient(verify=config.VERIFY_SSL, timeout=config.REQUEST_TIMEOUT) as client:
         # Для всех тенантов - используем Aggregation blacklist
         if tenant_id == "__all__":
-            tenants_with_lists = await _get_tenants_with_global_lists(client, "Aggregation blacklist")
+            tenants_with_lists = await _get_tenants_with_global_lists(client, token_manager, "Aggregation blacklist")
             results = []
             
             for t in tenants_with_lists:
@@ -1494,7 +1494,7 @@ async def api_remove_permanent_ips(request: Request):
     async with httpx.AsyncClient(verify=config.VERIFY_SSL, timeout=config.REQUEST_TIMEOUT) as client:
         # Для всех тенантов - используем Aggregation blacklist
         if tenant_id == "__all__":
-            tenants_with_lists = await _get_tenants_with_global_lists(client, "Aggregation blacklist")
+            tenants_with_lists = await _get_tenants_with_global_lists(client, token_manager, "Aggregation blacklist")
             results = []
             
             for t in tenants_with_lists:
